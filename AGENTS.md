@@ -2,7 +2,7 @@
 
 ## Project
 
-PhotoView is a lightweight photo and video gallery distributed as one
+LiteGallery is a lightweight photo and video gallery distributed as one
 statically linked Go binary. It is read-only with respect to the original media
 library; generated files belong only in the configured cache directory.
 

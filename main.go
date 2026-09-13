@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"photoview/internal"
+	"github.com/ev-str/litegallery/internal"
 )
 
 //go:embed web/*
@@ -33,6 +33,7 @@ func main() {
 	flag.StringVar(&cfg.Listen, "listen", "127.0.0.1:8090", "HTTP listen address")
 	flag.StringVar(&cfg.Title, "title", "Gallery", "page title")
 	flag.IntVar(&cfg.ThumbSize, "thumb-size", 480, "maximum thumbnail side in pixels")
+	flag.Int64Var(&cfg.MaxImagePixels, "max-image-pixels", internal.DefaultMaxImagePixels, "maximum source image pixel count")
 	flag.BoolVar(&warmCache, "warm-cache", false, "generate missing thumbnails, then exit")
 	flag.BoolVar(&pruneCache, "prune-cache", false, "remove stale cache entries after a successful warm scan")
 	flag.IntVar(&warmWorkers, "workers", 1, "thumbnail workers used by -warm-cache")

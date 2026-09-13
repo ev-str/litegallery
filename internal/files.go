@@ -14,11 +14,12 @@ import (
 )
 
 type Config struct {
-	Root      string
-	Cache     string
-	Listen    string
-	Title     string
-	ThumbSize int
+	Root           string
+	Cache          string
+	Listen         string
+	Title          string
+	ThumbSize      int
+	MaxImagePixels int64
 }
 
 type Server struct {
@@ -52,6 +53,12 @@ var videoExt = map[string]bool{
 }
 
 func New(cfg Config, web fs.FS) (*Server, error) {
+	if cfg.MaxImagePixels == 0 {
+		cfg.MaxImagePixels = DefaultMaxImagePixels
+	}
+	if cfg.MaxImagePixels < 1 {
+		return nil, errors.New("maximum image pixel count must be positive")
+	}
 	root, err := filepath.Abs(cfg.Root)
 	if err != nil {
 		return nil, err

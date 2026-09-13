@@ -1,0 +1,96 @@
+#!/bin/sh
+
+# PROVIDE: litegallery
+# REQUIRE: NETWORKING mountcritremote
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="litegallery"
+rcvar="litegallery_enable"
+
+load_rc_config "${name}"
+
+: "${litegallery_enable:=YES}"
+: "${litegallery_user:=www}"
+: "${litegallery_group:=www}"
+: "${litegallery_root:=/mnt/tank/photos}"
+: "${litegallery_cache:=/mnt/tank/litegallery-cache}"
+: "${litegallery_listen:=0.0.0.0:8090}"
+: "${litegallery_title:=Gallery}"
+: "${litegallery_program:=/usr/local/sbin/litegallery}"
+
+program="${litegallery_program}"
+pidfile="/var/run/litegallery.pid"
+logfile="/var/log/litegallery.log"
+
+start_cmd="litegallery_start"
+stop_cmd="litegallery_stop"
+status_cmd="litegallery_status"
+
+litegallery_is_running()
+{
+	[ -r "${pidfile}" ] || return 1
+	pid="$(cat "${pidfile}")"
+	[ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null
+}
+
+litegallery_start()
+{
+	if litegallery_is_running; then
+		echo "${name} is already running (pid ${pid})."
+		return 0
+	fi
+
+	if [ ! -x "${program}" ]; then
+		echo "${program} is missing or not executable." >&2
+		return 1
+	fi
+
+	install -d -o "${litegallery_user}" -g "${litegallery_group}" -m 0755 "${litegallery_cache}" || return 1
+	rm -f "${pidfile}"
+
+	/usr/sbin/daemon \
+		-p "${pidfile}" \
+		-o "${logfile}" \
+		-u "${litegallery_user}" \
+		"${program}" \
+		-root "${litegallery_root}" \
+		-cache "${litegallery_cache}" \
+		-listen "${litegallery_listen}" \
+		-title "${litegallery_title}"
+
+	sleep 1
+	if litegallery_is_running; then
+		echo "Started ${name} (pid ${pid})."
+	else
+		echo "Failed to start ${name}; see ${logfile}." >&2
+		return 1
+	fi
+}
+
+litegallery_stop()
+{
+	if ! litegallery_is_running; then
+		echo "${name} is not running."
+		rm -f "${pidfile}"
+		return 0
+	fi
+
+	echo "Stopping ${name} (pid ${pid})."
+	kill "${pid}" || return 1
+	wait_for_pids "${pid}"
+	rm -f "${pidfile}"
+}
+
+litegallery_status()
+{
+	if litegallery_is_running; then
+		echo "${name} is running (pid ${pid})."
+		return 0
+	fi
+	echo "${name} is not running."
+	return 1
+}
+
+run_rc_command "$1"

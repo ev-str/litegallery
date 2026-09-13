@@ -1,4 +1,4 @@
-APP := photoview
+APP := litegallery
 BUILD := build
 
 .PHONY: test build build-freebsd clean

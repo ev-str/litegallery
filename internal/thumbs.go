@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"image"
 	_ "image/gif"
 	"image/jpeg"
@@ -26,6 +27,8 @@ var (
 	thumbLocks   sync.Map
 	thumbWorkers = make(chan struct{}, 2)
 )
+
+const DefaultMaxImagePixels int64 = 100_000_000
 
 func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -55,7 +58,7 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		}
-		err := makeThumbnail(abs, cached, s.cfg.ThumbSize)
+		err := makeThumbnail(abs, cached, s.cfg.ThumbSize, s.cfg.MaxImagePixels)
 		<-thumbWorkers
 		if err != nil {
 			http.Error(w, "cannot create thumbnail", http.StatusUnsupportedMediaType)
@@ -146,12 +149,25 @@ func writeCachedJPEG(destination string, data []byte) error {
 	return os.Rename(tmpName, destination)
 }
 
-func makeThumbnail(source, destination string, maxSide int) error {
+func makeThumbnail(source, destination string, maxSide int, maxPixels int64) error {
 	file, err := os.Open(source)
 	if err != nil {
 		return err
 	}
 	orientation := jpegOrientation(file)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		file.Close()
+		return err
+	}
+	config, _, err := image.DecodeConfig(file)
+	if err != nil {
+		file.Close()
+		return err
+	}
+	if err := validateImageDimensions(config.Width, config.Height, maxPixels); err != nil {
+		file.Close()
+		return err
+	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		file.Close()
 		return err
@@ -164,8 +180,8 @@ func makeThumbnail(source, destination string, maxSide int) error {
 	src = orient(src, orientation)
 	bounds := src.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
-	if w <= 0 || h <= 0 {
-		return errors.New("empty image")
+	if err := validateImageDimensions(w, h, maxPixels); err != nil {
+		return err
 	}
 	newW, newH := w, h
 	if w > maxSide || h > maxSide {
@@ -194,6 +210,19 @@ func makeThumbnail(source, destination string, maxSide int) error {
 		return err
 	}
 	return os.Rename(tmpName, destination)
+}
+
+func validateImageDimensions(width, height int, maxPixels int64) error {
+	if width <= 0 || height <= 0 {
+		return errors.New("empty image")
+	}
+	if maxPixels < 1 {
+		return errors.New("maximum image pixel count must be positive")
+	}
+	if int64(width) > maxPixels/int64(height) {
+		return fmt.Errorf("image dimensions %dx%d exceed limit of %d pixels", width, height, maxPixels)
+	}
+	return nil
 }
 
 func jpegOrientation(r io.Reader) int {

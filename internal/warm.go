@@ -192,7 +192,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 					result.operation = "cache-stat"
 					result.err = statErr
 				} else {
-					makeErr := makeThumbnail(job.source, job.cache, s.cfg.ThumbSize)
+					makeErr := makeThumbnail(job.source, job.cache, s.cfg.ThumbSize, s.cfg.MaxImagePixels)
 					result.operation = "thumbnail"
 					result.generated = makeErr == nil
 					result.err = makeErr

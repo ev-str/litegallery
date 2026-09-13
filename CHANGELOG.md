@@ -13,9 +13,26 @@
 
 ### Changed
 
+- Renamed the project, Go module, binaries, and deployment script from
+  PhotoView to LiteGallery.
+- Thumbnail generation now rejects source images over 100 megapixels before
+  full decoding; the limit is configurable with `-max-image-pixels`.
 - Cache warmer errors now include the failing operation, source path, and
   underlying error in the log.
 - Date sorting uses cached EXIF capture time for photos and filesystem creation
   time as a fallback.
 - EXIF wall-clock timestamps are interpreted in the NAS local timezone so photo
   and video sorting uses comparable Unix timestamps.
+
+### Planned
+
+- Refresh the visual hierarchy with an album title, media statistics, and a
+  unified filter and sorting toolbar.
+- Replace text symbols with consistent embedded SVG icons.
+- Refine folder covers and media cards with improved typography, depth, loading
+  placeholders, and restrained motion.
+- Introduce a dark cinematic viewer with auto-hiding controls.
+- Present EXIF metadata as a side panel on larger screens and a bottom sheet on
+  phones.
+- Improve mobile controls and TV-focused keyboard navigation without adding a
+  frontend build step or external runtime dependencies.

@@ -1,4 +1,4 @@
-module photoview
+module github.com/ev-str/litegallery
 
 go 1.24.0
 
