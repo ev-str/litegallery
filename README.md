@@ -119,6 +119,17 @@ make build-freebsd
 
 The output is `build/litegallery-freebsd-amd64`.
 
+For Linux-based NAS distributions, build all common architectures:
+
+```sh
+make build-linux
+```
+
+This produces `litegallery-linux-amd64` and `litegallery-linux-arm64` in
+`build/`. Individual targets with the same suffixes are also available. The
+64-bit binaries are statically linked and are not tied to a specific Linux
+distribution.
+
 Copy it to the NAS, for example as `/usr/local/sbin/litegallery`, then copy
 [`deploy/litegallery.rc`](deploy/litegallery.rc) to a persistent location. The
 script supports `start`, `stop`, `restart`, and `status` and runs LiteGallery as
@@ -174,6 +185,7 @@ accounts or TLS.
 go test ./...
 go vet ./...
 make build-freebsd
+make build-linux
 ```
 
 User-visible changes belong in [`CHANGELOG.md`](CHANGELOG.md). Repository rules

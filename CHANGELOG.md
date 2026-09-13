@@ -4,6 +4,7 @@
 
 ### Added
 
+- Linux NAS build targets for amd64 and arm64 architectures.
 - On-demand EXIF viewing for photos, including capture time, camera, lens,
   exposure settings, dimensions, and GPS coordinates when available.
 - Responsive metadata panel for desktop, phone, and fullscreen viewing.
