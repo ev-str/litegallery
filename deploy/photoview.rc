@@ -1,0 +1,96 @@
+#!/bin/sh
+
+# PROVIDE: photoview
+# REQUIRE: NETWORKING mountcritremote
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="photoview"
+rcvar="photoview_enable"
+
+load_rc_config "${name}"
+
+: "${photoview_enable:=YES}"
+: "${photoview_user:=www}"
+: "${photoview_group:=www}"
+: "${photoview_root:=/mnt/tank/photos}"
+: "${photoview_cache:=/mnt/tank/photoview-cache}"
+: "${photoview_listen:=0.0.0.0:8090}"
+: "${photoview_title:=Gallery}"
+: "${photoview_program:=/usr/local/sbin/photoview}"
+
+program="${photoview_program}"
+pidfile="/var/run/photoview.pid"
+logfile="/var/log/photoview.log"
+
+start_cmd="photoview_start"
+stop_cmd="photoview_stop"
+status_cmd="photoview_status"
+
+photoview_is_running()
+{
+	[ -r "${pidfile}" ] || return 1
+	pid="$(cat "${pidfile}")"
+	[ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null
+}
+
+photoview_start()
+{
+	if photoview_is_running; then
+		echo "${name} is already running (pid ${pid})."
+		return 0
+	fi
+
+	if [ ! -x "${program}" ]; then
+		echo "${program} is missing or not executable." >&2
+		return 1
+	fi
+
+	install -d -o "${photoview_user}" -g "${photoview_group}" -m 0755 "${photoview_cache}" || return 1
+	rm -f "${pidfile}"
+
+	/usr/sbin/daemon \
+		-p "${pidfile}" \
+		-o "${logfile}" \
+		-u "${photoview_user}" \
+		"${program}" \
+		-root "${photoview_root}" \
+		-cache "${photoview_cache}" \
+		-listen "${photoview_listen}" \
+		-title "${photoview_title}"
+
+	sleep 1
+	if photoview_is_running; then
+		echo "Started ${name} (pid ${pid})."
+	else
+		echo "Failed to start ${name}; see ${logfile}." >&2
+		return 1
+	fi
+}
+
+photoview_stop()
+{
+	if ! photoview_is_running; then
+		echo "${name} is not running."
+		rm -f "${pidfile}"
+		return 0
+	fi
+
+	echo "Stopping ${name} (pid ${pid})."
+	kill "${pid}" || return 1
+	wait_for_pids "${pid}"
+	rm -f "${pidfile}"
+}
+
+photoview_status()
+{
+	if photoview_is_running; then
+		echo "${name} is running (pid ${pid})."
+		return 0
+	fi
+	echo "${name} is not running."
+	return 1
+}
+
+run_rc_command "$1"

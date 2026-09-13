@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f3ec">
+  <title>Gallery</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" id="brand" href="/">Gallery</a>
+    <nav id="breadcrumbs" aria-label="Путь"></nav>
+    <button id="refresh" class="icon-button" type="button" title="Обновить" aria-label="Обновить">↻</button>
+  </header>
+  <main>
+    <div id="status">Загрузка…</div>
+    <section id="foldersSection" class="collection-section" hidden>
+      <div class="section-heading">
+        <h1>Папки</h1>
+        <div class="section-tools">
+          <span id="folderCount"></span>
+          <button id="folderSort" class="sort-button" type="button" aria-label="Изменить порядок папок"></button>
+        </div>
+      </div>
+      <div id="folders" class="folder-grid" aria-live="polite"></div>
+    </section>
+    <section id="mediaSection" class="collection-section" hidden>
+      <div class="section-heading media-heading">
+        <div class="media-title-row">
+          <h1>Фотографии и видео</h1>
+          <span id="mediaCount"></span>
+        </div>
+        <div class="section-tools media-tools">
+          <div id="mediaFilter" class="filter-segments" aria-label="Тип файлов">
+            <button type="button" data-filter="all">Все</button>
+            <button type="button" data-filter="image">Фото</button>
+            <button type="button" data-filter="video">Видео</button>
+          </div>
+          <select id="mediaSort" class="sort-select" aria-label="Сортировка файлов">
+            <option value="date">По дате</option>
+            <option value="name">По имени</option>
+          </select>
+          <button id="mediaDirection" class="sort-button direction-button" type="button" aria-label="Изменить направление сортировки"></button>
+        </div>
+      </div>
+      <div id="mediaGrid" class="media-grid" aria-live="polite"></div>
+    </section>
+  </main>
+  <dialog id="viewer">
+    <button class="viewer-button close" type="button" aria-label="Закрыть">×</button>
+    <button class="viewer-button prev" type="button" aria-label="Предыдущее">‹</button>
+    <div class="stage">
+      <button class="viewer-button fullscreen" type="button" aria-label="На весь экран">⛶</button>
+      <button class="viewer-button info" type="button" aria-label="Информация о фотографии" title="EXIF">ⓘ</button>
+      <aside class="exif-panel" hidden aria-live="polite">
+        <header><strong>О фотографии</strong><button class="exif-close" type="button" aria-label="Закрыть информацию">×</button></header>
+        <div class="exif-content"></div>
+      </aside>
+    </div>
+    <button class="viewer-button next" type="button" aria-label="Следующее">›</button>
+    <footer><span class="caption"></span><button class="slideshow" type="button">▶ Слайд-шоу</button></footer>
+  </dialog>
+  <script src="/app.js" defer></script>
+</body>
+</html>

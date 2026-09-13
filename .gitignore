@@ -1,0 +1,5 @@
+/build/
+/cache/
+/photoview
+.DS_Store
+*.log
