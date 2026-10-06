@@ -95,7 +95,8 @@ test('export downloads a print JPEG over plain HTTP', {tag: '@essential'}, async
   const pending = page.waitForEvent('download');
   await exportDialog.getByRole('button', {name: 'Скачать на устройство'}).click();
   const download = await pending;
-  expect(download.suggestedFilename()).toBe('Пироги май — 10x15 — 300ppi.jpg');
+  // WebKit reports download names in NFD; compare the normalized text.
+  expect(download.suggestedFilename().normalize('NFC')).toBe('Пироги май — 10x15 — 300ppi.jpg');
   const jpeg = await readDownload(download);
   expect(jpeg.length).toBeGreaterThan(1_000);
   expect([...jpeg.subarray(0, 2)]).toEqual([0xff, 0xd8]);

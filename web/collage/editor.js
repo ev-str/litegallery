@@ -7,6 +7,7 @@ import {exportJpeg} from './export.js';
 import {EDGE_PRESETS} from './frames.js';
 import {jpegFilename, projectFilename} from './filenames.js';
 import {getPrintDimensions, getPrintFormat, PRINT_FORMATS} from './formats.js';
+import {exceedsSafeCanvas, maxPpiForMemory} from './limits.js';
 import {centeredCrop, clampCrop, cropDistortionPercent, effectiveCropPpi, normalizePhotoRotation, rectToPixels, refitCropAroundCenter, rotatedSourceDimensions} from './geometry.js';
 import {assertProject, createPlacementId, createProject, getCellAspect, validateProject} from './model.js';
 import {BACKGROUND_PALETTE, createFramePalette} from './palette.js';
@@ -97,7 +98,7 @@ auxiliary.innerHTML = `
   <dialog class="collage-modal" data-crop-dialog><form method="dialog" class="collage-modal-card collage-crop-card"><header><strong>Кроп фотографии</strong><button value="cancel" aria-label="Закрыть">×</button></header><div class="collage-crop-tools"><label><input type="radio" name="crop-mode" value="proportional" checked> Сохранять пропорции</label><label><input type="radio" name="crop-mode" value="free"> Искажать пропорции</label></div><div class="collage-crop-stage" tabindex="0" aria-label="Область кропа. Стрелки двигают рамку, плюс и минус меняют масштаб, квадратные скобки поворачивают фото"><div class="collage-crop-image-box"><img alt="Редактируемая фотография"><div class="collage-crop-frame"><i data-crop-handle="nw"></i><i data-crop-handle="n"></i><i data-crop-handle="ne"></i><i data-crop-handle="e"></i><i data-crop-handle="se"></i><i data-crop-handle="s"></i><i data-crop-handle="sw"></i><i data-crop-handle="w"></i></div></div></div><div class="collage-crop-quality" data-crop-quality role="status" aria-live="polite"></div><footer><button type="button" data-crop-action="reset">Сбросить</button><button type="button" data-crop-action="center">По центру</button><span class="collage-crop-rotation" role="group" aria-label="Поворот фотографии"><button type="button" data-crop-action="rotate-left" aria-label="Повернуть фотографию на 90 градусов влево">↶ 90°</button><button type="button" data-crop-action="rotate-right" aria-label="Повернуть фотографию на 90 градусов вправо">↷ 90°</button></span><button type="button" data-crop-action="minus" aria-label="Уменьшить масштаб рамки">−</button><button type="button" data-crop-action="plus" aria-label="Увеличить масштаб рамки">+</button><span></span><button value="cancel">Отмена</button><button type="button" class="primary" data-crop-action="done">Готово</button></footer></form></dialog>
   <dialog class="collage-modal" data-preflight-dialog><div class="collage-modal-card"><header><strong>Проверка перед печатью</strong><button type="button" data-modal-close aria-label="Закрыть">×</button></header><div data-preflight-content></div><footer><button type="button" data-modal-close>Вернуться</button><button type="button" class="primary" data-command="open-export">Настройки скачивания</button></footer></div></dialog>
   <dialog class="collage-modal" data-save-dialog><div class="collage-modal-card collage-save-card"><header><strong>Сохранить проект</strong><button type="button" data-save-close aria-label="Закрыть">×</button></header><p>Файл проекта будет сохранён как</p><strong class="collage-save-filename" data-project-filename></strong><footer><button type="button" data-save-close>Отмена</button><button type="button" class="primary" data-command="confirm-save-project">Сохранить</button></footer></div></dialog>
-  <dialog class="collage-modal" data-export-dialog><div class="collage-modal-card"><header><strong>Скачать JPEG</strong><button type="button" data-modal-close aria-label="Закрыть">×</button></header><div class="collage-export-form"><label>Формат<select data-export-format></select></label><label>Ориентация<select data-export-orientation><option value="portrait">Вертикально</option><option value="landscape">Горизонтально</option></select></label><label>Качество<select data-export-ppi><option value="300">300 PPI · для печати</option></select></label><label class="collage-export-bleed"><input type="checkbox" data-export-bleed> <span>Запас под обрезку 2 мм</span></label><div class="collage-export-summary" data-export-summary></div><div class="collage-save-filename" data-export-filename></div><progress data-export-progress max="1" value="0" aria-label="Прогресс подготовки JPEG" hidden></progress><p data-export-status role="status" aria-live="polite"></p></div><footer><button type="button" data-command="cancel-export" hidden>Отменить</button><span></span><button type="button" class="primary" data-command="export">Скачать на устройство</button></footer></div></dialog>
+  <dialog class="collage-modal" data-export-dialog><div class="collage-modal-card"><header><strong>Скачать JPEG</strong><button type="button" data-modal-close aria-label="Закрыть">×</button></header><div class="collage-export-form"><label>Формат<select data-export-format></select></label><label>Ориентация<select data-export-orientation><option value="portrait">Вертикально</option><option value="landscape">Горизонтально</option></select></label><label>Качество<select data-export-ppi><option value="300">300 PPI · для печати</option></select></label><label class="collage-export-bleed"><input type="checkbox" data-export-bleed> <span>Запас под обрезку 2 мм</span></label><div class="collage-export-summary" data-export-summary></div><p class="collage-export-warning" data-export-canvas-warning role="note" hidden>Этот формат может не собраться в браузере на телефоне или планшете. На компьютере ограничений нет.</p><div class="collage-save-filename" data-export-filename></div><progress data-export-progress max="1" value="0" aria-label="Прогресс подготовки JPEG" hidden></progress><p data-export-status role="status" aria-live="polite"></p></div><footer><button type="button" data-command="cancel-export" hidden>Отменить</button><span></span><button type="button" class="primary" data-command="export">Скачать на устройство</button></footer></div></dialog>
   <dialog class="collage-modal" data-exit-dialog><div class="collage-modal-card collage-exit-card"><header><strong data-exit-heading>Сохранить изменения?</strong></header><p data-exit-message>В проекте есть несохранённые изменения.</p><label>Сохранить проект<select data-exit-save-kind><option value="json">Только разметка</option><option value="zip">Разметка и фото</option></select></label><strong class="collage-save-filename" data-exit-filename></strong><p data-exit-size></p><footer><button type="button" data-exit="stay">Остаться</button><button type="button" data-exit="discard">Выйти без сохранения</button><button type="button" class="primary" data-exit="save">Сохранить и выйти</button></footer></div></dialog>
   <dialog class="collage-modal collage-photo-preview" data-photo-preview-dialog><div class="collage-modal-card"><header><strong data-photo-preview-name>Просмотр фотографии</strong><span></span><button type="button" data-photo-preview-zoom title="Включить масштабирование и перемещение" aria-label="Включить масштабирование и перемещение" aria-pressed="false">🔍 <span data-photo-preview-zoom-value>100%</span></button><button type="button" data-photo-preview-close aria-label="Закрыть просмотр фотографии">×</button></header><div class="collage-photo-preview-stage"><span class="collage-preview-spinner" aria-hidden="true"></span><img alt=""></div></div></dialog>`;
 document.body.append(...auxiliary.children);
@@ -1388,15 +1389,29 @@ async function executeExport() {
   progress.hidden = false; progress.value = 0; cancel.hidden = false; status.textContent = 'Подготавливаем фотографии…';
   exportAbort = new AbortController();
   try {
-    const blob = await exportJpeg(toRenderProject(state, false, lineWidth), physical, {signal: exportAbort.signal, onProgress(completed, total) { progress.value = total ? completed / total : 0; status.textContent = `Обработано ${completed} из ${total}`; }});
-    downloadBlob(blob, jpegFilename(state.title, state.print));
-    status.textContent = `Готово · ${formatDownloadSize(blob.size)}`;
+    let actualPpi = physical.ppi;
+    const blob = await exportJpeg(toRenderProject(state, false, lineWidth), physical, {
+      signal: exportAbort.signal,
+      onProgress(completed, total) { progress.value = total ? completed / total : 0; status.textContent = `Обработано ${completed} из ${total}`; },
+      onPpiFallback(_requested, actual) { actualPpi = actual; },
+    });
+    downloadBlob(blob, jpegFilename(state.title, {...state.print, ppi: actualPpi}));
+    status.textContent = actualPpi === physical.ppi
+      ? `Готово · ${formatDownloadSize(blob.size)}`
+      : `Готово в ${actualPpi} PPI: для ${physical.ppi} PPI не хватает памяти · ${formatDownloadSize(blob.size)}`;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!(error instanceof DOMException && error.name === 'AbortError') && physical.ppi > 300 && /memory|allocation|canvas|size|large|памят/i.test(message)) {
-      status.innerHTML = `Не хватило памяти для ${physical.ppi} PPI. <button type="button" data-command="retry-300">Повторить в 300 PPI</button>`;
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      status.textContent = 'Скачивание отменено';
+    } else if (physical.ppi > 300) {
+      status.replaceChildren(`Не удалось собрать JPEG в ${physical.ppi} PPI: ${message}. `);
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.dataset.command = 'retry-300';
+      retry.textContent = 'Повторить в 300 PPI';
+      status.append(retry);
     } else {
-      status.textContent = error instanceof DOMException && error.name === 'AbortError' ? 'Скачивание отменено' : `Не удалось собрать JPEG: ${message}`;
+      status.textContent = `Не удалось собрать JPEG: ${message}`;
     }
   } finally {
     cancel.hidden = true;
@@ -1425,6 +1440,8 @@ function updateExportSummary() {
   }
   const summary = exportDialog.querySelector('[data-export-summary]');
   if (summary) summary.innerHTML = `<strong>${dimensions.outputWidthMm / 10} × ${dimensions.outputHeightMm / 10} см</strong><span>${dimensions.widthPx} × ${dimensions.heightPx} px</span><span>${settings.ppi} PPI</span><span>≈ ${formatDownloadSize(estimatedBytes)}</span><span class="collage-export-weakest">Слабый кадр: ${weakest}</span><span class="collage-export-bleed-state">${settings.bleedMm ? 'Запас 2 мм' : 'Без запаса'}</span>`;
+  const canvasWarning = /** @type {HTMLElement|null} */ (exportDialog.querySelector('[data-export-canvas-warning]'));
+  if (canvasWarning) canvasWarning.hidden = !exceedsSafeCanvas(dimensions.widthPx, dimensions.heightPx);
   if (store) setModalText(exportDialog, '[data-export-filename]', jpegFilename(store.getState().title, settings));
 }
 
@@ -1475,11 +1492,7 @@ function highestSafePpi(state, formatId, orientation, bleedMm) {
     const vertical = dimensions.height * placement.crop.height / (heightMm * cell.rect.height / 25.4);
     sourceLimit = Math.min(sourceLimit, horizontal, vertical);
   });
-  const dimensions300 = getPrintDimensions(formatId, orientation, 300, bleedMm);
-  const deviceMemoryGb = Number(/** @type {any} */ (navigator).deviceMemory) || 4;
-  const memoryBudget = Math.min(512 * 1024 ** 2, deviceMemoryGb * 1024 ** 3 * .12);
-  const workingBytesAt300 = dimensions300.widthPx * dimensions300.heightPx * 4 * 2.2;
-  const memoryLimit = 300 * Math.sqrt(memoryBudget / workingBytesAt300);
+  const memoryLimit = maxPpiForMemory(formatId, orientation, bleedMm);
   const raw = Math.min(Number.isFinite(sourceLimit) ? sourceLimit : 300, memoryLimit, 600);
   return Math.max(300, Math.floor(raw / 25) * 25);
 }

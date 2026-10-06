@@ -247,7 +247,8 @@ npm run test:e2e:full
 go test ./...
 go test -race ./...
 go vet ./...
-make VERSION=v0.2.0 build-freebsd
+make build-freebsd
+make build-linux
 ```
 
 Browser smoke testing covers selection, multiple source folders, templates,
@@ -257,9 +258,10 @@ collage zoom/pan, fitted source-photo previews, and source-photo zoom/pan.
 Browser tests must verify visible decoded images rather than treating a
 successful ZIP parse as sufficient. Unit and integration coverage locks
 preview/export divider colour parity and EXIF display dimensions for
-orientations 1–8, including mirrored camera images. Pixel-level parity between
-the preview and exported JPEG for oriented sources remains an explicit E2E
-release check.
+orientations 1–8, including mirrored camera images. Browser tests
+(`tests/e2e/orientation-tiff.spec.mjs`) check in every desktop engine that the
+decoder used for preview and export orients EXIF 1, 5, and 6 pixels exactly as
+the server thumbnails do.
 
 ## Current boundaries and follow-ups
 
@@ -273,20 +275,15 @@ release check.
 - Future document migrations require an explicit versioned migration design
   and UI; compatibility must not be guessed silently.
 - TIFF remains visible in the gallery but is not selectable for collages.
-- Import-time handling of TIFF sources from legacy collage projects is outside
-  `v0.2.0`: no such projects exist, and TIFF remains unsupported in collages.
+- JSON and ZIP projects that reference TIFF sources are rejected on import
+  with the names of the affected photos.
 - The 12-photo selection ceiling is intentionally silent: clicking a 13th
   photo leaves the current selection unchanged without replacing the hint.
-- TIFF support is checked separately in `web/app.js` and
-  `web/collage/sources.js`. Consolidating the duplicated guard is backlog work;
-  until then both checks must stay aligned.
-- Before release, run a real-browser export regression with an asymmetric JPEG
-  carrying EXIF Orientation 6 and one mirrored orientation, then compare known
-  preview pixels with the exported JPEG.
-- Replace source-text TIFF assertions in `collage-ui-contract.test.mjs` with a
-  behavioural E2E check that clicking a TIFF card does not change selection.
-- Canvas limits and large-source/ZIP memory optimisations remain future work.
-  As a temporary `v0.2.0` safeguard, every screen shows an informational
-  warning when selected originals exceed 50 MB in total; it does not block the
-  workflow. A future warning should use source megapixels and export format
-  instead of compressed file size.
+- Collage format support is defined once in `web/collage/support.js` and used
+  by both the gallery selection and the editor.
+- Memory limits live in `web/collage/limits.js`. The PPI chooser and the export
+  share one budget and per-pixel estimate, so the chooser never offers a PPI
+  that the export would reject. The selection bar warns about photos above
+  `LARGE_PHOTO_MEGAPIXELS` using `/api/image-info`, and the export dialog warns
+  when a format exceeds `MAX_SAFE_CANVAS_PIXELS`. Warnings never block the
+  workflow; the thresholds are tuned by testing on real devices.

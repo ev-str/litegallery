@@ -88,6 +88,18 @@ test('project version check distinguishes future, migratable, and malformed file
   assert.equal(validateProjectDocument(unknownPlacement).reason, 'invalid');
 });
 
+test('projects that reference TIFF sources are rejected with the photo names', () => {
+  const {project} = canonicalProjectWithSources(['album/photo.jpg', 'scans/Scan 01.TIF']);
+  const result = validateProjectDocument(createProjectDocument(project, 'dev'));
+  assert.equal(result.ok, false);
+  assert.equal(result.ok ? '' : result.reason, 'invalid');
+  assert.match(result.ok ? '' : result.message, /TIFF/);
+  assert.match(result.ok ? '' : result.message, /Scan 01\.TIF/);
+
+  const {project: supported} = canonicalProjectWithSources(['album/photo.jpg', 'album/photo.png']);
+  assert.equal(validateProjectDocument(createProjectDocument(supported, 'dev')).ok, true);
+});
+
 test('malformed and oversized JSON files are rejected before import', async () => {
   const malformed = await readProjectBlob(new Blob(['{'], {type: 'application/json'}));
   assert.deepEqual(malformed, {ok: false, reason: 'invalid', message: 'Не удалось прочитать JSON проекта'});

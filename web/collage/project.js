@@ -1,6 +1,7 @@
 // @ts-check
 
 import {validateProject} from './model.js';
+import {isCollageSupportedPath} from './support.js';
 
 export const PROJECT_FORMAT = 'litegallery-collage';
 export const PROJECT_FORMAT_VERSION = 1;
@@ -33,6 +34,10 @@ export function validateProjectDocument(input) {
     return {ok: false, reason: 'older-version', formatVersion: document.formatVersion, message: 'Для проекта требуется миграция'};
   }
   if (!document.project || typeof document.project !== 'object' || !isValidProject(document.project)) return invalid('В проекте отсутствуют обязательные поля');
+  const unsupported = Object.values(document.project.sources ?? {}).filter(source => !isCollageSupportedPath(source?.path ?? ''));
+  if (unsupported.length) {
+    return invalid(`Проект содержит фото в формате, который нельзя использовать в коллаже (TIFF): ${unsupported.map(source => source.name || source.path).join(', ')}`);
+  }
   return {ok: true, project: structuredClone(document.project)};
 }
 
@@ -121,6 +126,8 @@ function uniqueSafeName(name, used, index) {
 /**
  * Dependency-free ZIP store writer. JPEG files are already compressed, so the
  * store method avoids wasting memory and CPU on ineffective recompression.
+ * Entry bytes are read only to compute CRC32; the archive references the
+ * original Blobs, so each photo is not held twice while the ZIP is assembled.
  * @param {Array<{name: string, blob: Blob}>} entries
  */
 export async function createStoredZip(entries) {
@@ -131,9 +138,9 @@ export async function createStoredZip(entries) {
   let offset = 0;
   for (const entry of entries) {
     const name = encoder.encode(entry.name);
-    const data = new Uint8Array(await entry.blob.arrayBuffer());
-    if (name.length > 65_535 || data.length > 0xffffffff || offset > 0xffffffff) throw new RangeError('ZIP32 size limit exceeded');
-    const checksum = crc32(data);
+    const size = entry.blob.size;
+    if (name.length > 65_535 || size > 0xffffffff || offset > 0xffffffff) throw new RangeError('ZIP32 size limit exceeded');
+    const checksum = crc32(new Uint8Array(await entry.blob.arrayBuffer()));
     const local = new Uint8Array(30 + name.length);
     const localView = new DataView(local.buffer);
     localView.setUint32(0, 0x04034b50, true);
@@ -141,11 +148,11 @@ export async function createStoredZip(entries) {
     localView.setUint16(6, 0x0800, true);
     localView.setUint16(8, 0, true);
     localView.setUint32(14, checksum, true);
-    localView.setUint32(18, data.length, true);
-    localView.setUint32(22, data.length, true);
+    localView.setUint32(18, size, true);
+    localView.setUint32(22, size, true);
     localView.setUint16(26, name.length, true);
     local.set(name, 30);
-    locals.push(local, data);
+    locals.push(local, entry.blob);
 
     const central = new Uint8Array(46 + name.length);
     const centralView = new DataView(central.buffer);
@@ -155,13 +162,13 @@ export async function createStoredZip(entries) {
     centralView.setUint16(8, 0x0800, true);
     centralView.setUint16(10, 0, true);
     centralView.setUint32(16, checksum, true);
-    centralView.setUint32(20, data.length, true);
-    centralView.setUint32(24, data.length, true);
+    centralView.setUint32(20, size, true);
+    centralView.setUint32(24, size, true);
     centralView.setUint16(28, name.length, true);
     centralView.setUint32(42, offset, true);
     central.set(name, 46);
     centrals.push(central);
-    offset += local.length + data.length;
+    offset += local.length + size;
   }
   const centralOffset = offset;
   const centralSize = centrals.reduce((sum, value) => sum + value.length, 0);
