@@ -1,11 +1,12 @@
+// Markup and CSS contracts that browser tests cannot observe directly: labels,
+// control order, and layout rules. Behaviour belongs in tests/e2e instead;
+// remove an assertion here once a browser test covers the same behaviour.
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 const editorUrl = new URL('../../web/collage/editor.js', import.meta.url);
 const cssUrl = new URL('../../web/collage.css', import.meta.url);
-const indexUrl = new URL('../../web/index.html', import.meta.url);
-const appUrl = new URL('../../web/app.js', import.meta.url);
 
 test('editor exposes two settings-panel transforms, no thumbnail overlay, and the concise download label', async () => {
   const source = await readFile(editorUrl, 'utf8');
@@ -63,35 +64,6 @@ test('focus workspace exposes a collapsed template accordion, icon-only canvas f
   assert.match(css, /data-canvas-focus="true"/);
   assert.match(css, /data-canvas-zoom="true"/);
   assert.match(css, /collage-photo-preview\[data-zoom="true"\]/);
-});
-
-test('selection bar opens JSON or ZIP projects through the shared validated input', async () => {
-  const index = await readFile(indexUrl, 'utf8');
-  const app = await readFile(appUrl, 'utf8');
-  const editor = await readFile(editorUrl, 'utf8');
-  assert.match(index, /id="collageProjectOpen"[^>]*>Открыть проект<\/button>/);
-  assert.match(index, /id="collageProjectInput"[^>]*accept="application\/json,application\/zip,.json,.zip"/);
-  assert.match(app, /collageProjectOpen\.addEventListener\('click'/);
-  assert.match(editor, /readProjectZip\(file\)/);
-  assert.match(editor, /readProjectBlob\(file\)/);
-  assert.match(editor, /assertProject\(project\);/);
-});
-
-test('runtime version is loaded from the server and written into saved project documents', async () => {
-  const source = await readFile(editorUrl, 'utf8');
-  assert.match(source, /fetch\('\/api\/config'/);
-  assert.match(source, /createProject\(\{appVersion, photoCount\}\)/);
-  assert.match(source, /createProjectDocument\(savedProject, appVersion\)/);
-  assert.doesNotMatch(source, /createProjectDocument\(savedProject, 'dev'\)/);
-});
-
-test('opening another project protects dirty work before showing the file picker', async () => {
-  const source = await readFile(editorUrl, 'utf8');
-  assert.match(source, /if \(command === 'load-project'\) return requestProjectLoad\(\)/);
-  assert.match(source, /function requestProjectLoad\(\) \{\s*if \(!dirty\) return openProjectPicker\(\);/);
-  assert.match(source, /pendingExitAction = 'load'/);
-  assert.match(source, /Открыть без сохранения/);
-  assert.match(source, /Сохранить и открыть/);
 });
 
 test('collage name lives in the toolbar and filenames appear only in save and export dialogs', async () => {
