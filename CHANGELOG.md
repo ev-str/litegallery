@@ -27,6 +27,7 @@
 - Collage format support is defined once and shared by the gallery and the
   editor; JSON and ZIP projects that reference TIFF photos are rejected on
   import with the affected names.
+- Saving a ZIP project no longer keeps a second in-memory copy of every photo.
 
 ### Development
 
