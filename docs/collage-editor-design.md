@@ -247,7 +247,8 @@ npm run test:e2e:full
 go test ./...
 go test -race ./...
 go vet ./...
-make VERSION=v0.2.0 build-freebsd
+make build-freebsd
+make build-linux
 ```
 
 Browser smoke testing covers selection, multiple source folders, templates,
