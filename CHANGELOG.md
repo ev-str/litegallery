@@ -11,23 +11,6 @@
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
 
-## Unreleased
-
-### Fixed
-
-- The thumbnail server no longer keeps a lock entry for every thumbnail ever
-  requested, so memory stays flat on long-running servers. Serving an already
-  cached thumbnail no longer waits behind other requests for the same file.
-
-### Development
-
-- The export PPI recommendation moved to `recommendedExportPpi` in
-  `web/collage/limits.js` and is derived from the preflight weakest-frame PPI,
-  so the offered PPI never exceeds the "weakest frame" value shown next to it.
-- `web/app.js` is split into the gallery (`app.js`), the viewer (`viewer.js`),
-  collage selection (`collage-selection.js`), video posters
-  (`video-posters.js`), and shared formatting helpers (`format.js`).
-
 ## 0.2.2 — 2026-10-06
 
 ### Added
@@ -42,9 +25,29 @@
 - `make release` builds release binaries and a `SHA256SUMS` file with bare
   file names into `dist/`, and refuses untagged or dirty checkouts.
 
+### Changed
+
+- Mirrored duplicates are removed from the template catalogue for every photo
+  count. Their old IDs stay loadable through a compatibility registry that
+  keeps the original cell order, so existing projects open unchanged.
+- The export PPI offered in the JPEG dialog is derived from the preflight
+  "weakest frame" value, so it never exceeds the PPI shown next to it.
+
+### Fixed
+
+- The thumbnail server no longer keeps a lock entry for every thumbnail ever
+  requested, so memory stays flat on long-running servers. Serving an already
+  cached thumbnail no longer waits behind other requests for the same file.
+
 ### Development
 
-- Browser tests for the viewer: navigation, slideshow, idle hiding, and EXIF.
+- `web/app.js` is split into the gallery (`app.js`), the viewer (`viewer.js`),
+  collage selection (`collage-selection.js`), video posters
+  (`video-posters.js`), and shared formatting helpers (`format.js`).
+- `recommendedExportPpi` in `web/collage/limits.js` holds the PPI rules and is
+  unit-tested directly.
+- Browser tests for the viewer: navigation, slideshow, idle hiding, keyboard
+  focus, and EXIF; the offered export PPI is checked against the weakest frame.
 - Unit test that every referenced icon exists in the sprite.
 - Documentation screenshots include the viewer.
 
