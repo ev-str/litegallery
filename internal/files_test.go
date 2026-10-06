@@ -50,6 +50,37 @@ func testServer(t *testing.T) (*Server, string) {
 	return s, root
 }
 
+func TestSecurityHeadersAllowBlobProjectAssets(t *testing.T) {
+	s, _ := testServer(t)
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	response := httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, request)
+
+	want := "default-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob:; media-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+	if got := response.Header().Get("Content-Security-Policy"); got != want {
+		t.Fatalf("Content-Security-Policy = %q, want %q", got, want)
+	}
+}
+
+func TestConfigReturnsTitleAndVersion(t *testing.T) {
+	root := t.TempDir()
+	s, err := New(Config{Root: root, Cache: filepath.Join(root, "cache"), Title: "Gallery", Version: "v0.2.0", ThumbSize: 320}, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	response := httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, request)
+
+	var config map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&config); err != nil {
+		t.Fatal(err)
+	}
+	if config["title"] != "Gallery" || config["version"] != "v0.2.0" {
+		t.Fatalf("config = %#v", config)
+	}
+}
+
 func TestResolveRejectsTraversal(t *testing.T) {
 	s, _ := testServer(t)
 	for _, input := range []string{"../secret", "a/../../secret", "/etc/passwd"} {

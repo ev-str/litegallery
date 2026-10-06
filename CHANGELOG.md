@@ -1,31 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### Added
-
-- Linux NAS build targets for amd64 and arm64 architectures.
-- On-demand EXIF viewing for photos, including capture time, camera, lens,
-  exposure settings, dimensions, and GPS coordinates when available.
-- Responsive metadata panel for desktop, phone, and fullscreen viewing.
-- Photo/video filtering and name/capture-date sorting in both directions.
-- Per-directory metadata manifests generated exclusively by cache warming.
-- Pure-Go MP4/MOV/M4V/3GP container creation-time parsing for video sorting.
-
-### Changed
-
-- Renamed the project, Go module, binaries, and deployment script from
-  PhotoView to LiteGallery.
-- Thumbnail generation now rejects source images over 100 megapixels before
-  full decoding; the limit is configurable with `-max-image-pixels`.
-- Cache warmer errors now include the failing operation, source path, and
-  underlying error in the log.
-- Date sorting uses cached EXIF capture time for photos and filesystem creation
-  time as a fallback.
-- EXIF wall-clock timestamps are interpreted in the NAS local timezone so photo
-  and video sorting uses comparable Unix timestamps.
-
-### Planned
+## Planned
 
 - Refresh the visual hierarchy with an album title, media statistics, and a
   unified filter and sorting toolbar.
@@ -37,3 +12,78 @@
   phones.
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
+
+## 0.2.0 — 2026-10-06
+
+### Added
+
+#### Collage editor
+
+- Browser-based collage editor for 2–12 photos selected from one or several
+  gallery folders. The same photo can fill several cells.
+- Layout library matched to the photo count. Mirrored variants are reached
+  through horizontal and vertical reflection controls instead of duplicate
+  tiles in the chooser.
+- Automatic filling, manual replacement, movement, and removal of photos.
+- Gallery and In collage panels. Clicking an In collage photo that is already
+  placed selects its cell; a following click on an empty cell adds the photo
+  again, and a click on a filled cell only selects it.
+- Crop-frame editing with fixed-ratio and free-ratio modes, 90° left/right
+  rotation, and per-photo PPI feedback.
+- Photo frames, decorative edge shapes, spacing, backgrounds, and frame colours
+  suggested from the selected background.
+- 20-step undo/redo, a full-canvas focus mode, and zoom/pan inspection for the
+  collage and large source-photo previews.
+- Local projects saved as compact JSON or as a self-contained ZIP with photos.
+  Projects open from the editor or from the gallery selection bar; replacing a
+  project with unsaved changes asks for confirmation.
+- Print preflight with per-photo warnings that can be ignored and restored.
+- Print-ready JPEG export for 10 × 15, 13 × 18, 15 × 20, 20 × 30, 30 × 45 cm,
+  and A4 at 300 PPI, with an optional 2 mm bleed and embedded resolution
+  metadata.
+- Selection-bar warning when the selected originals exceed 50 MB in total.
+
+#### Gallery and server
+
+- On-demand EXIF details: capture time, camera, lens, exposure, dimensions,
+  and GPS coordinates when available.
+- Photo/video filters and sorting by filename or capture date in both
+  directions.
+- Capture-date sorting for MP4, MOV, M4V, and 3GP videos through pure-Go
+  container parsing.
+- Per-directory metadata manifests, written only by the cache warmer.
+- `/api/image-info` endpoint with image dimensions for crop-quality and print
+  checks.
+- Release version in `/api/config`, set at build time with
+  `make VERSION=<tag>` and recorded in saved collage projects.
+- Linux amd64 and arm64 build targets for NAS distributions.
+
+#### Development
+
+- Strict type checking for the collage modules.
+- Go, JavaScript unit, and Playwright browser tests. The browser tests have an
+  essential suite for every commit and a full suite for releases.
+- Reproducible documentation screenshots via `npm run screenshots:docs`.
+
+### Changed
+
+- Renamed the project, Go module, binaries, and rc script from PhotoView to
+  LiteGallery.
+- Thumbnail generation rejects source images over 100 megapixels before full
+  decoding; the limit is configurable with `-max-image-pixels`.
+- Cache-warmer errors include the failing operation, source path, and
+  underlying error.
+- Date sorting uses cached EXIF capture time for photos, with filesystem
+  creation time as a fallback.
+- EXIF wall-clock timestamps are interpreted in the NAS local timezone, so photo
+  and video dates sort consistently.
+- The Content Security Policy allows `blob:` images and same-origin `blob:`
+  fetches required by ZIP projects; other restrictions are unchanged.
+
+### Known limitations
+
+- TIFF photos are shown in the gallery but cannot be used in collages.
+- The collage editor targets desktop and tablet browsers. On phones, large
+  print formats and very large originals may exceed browser memory limits.
+- LiteGallery has no authentication or TLS. Keep it on a trusted LAN or behind
+  an authenticated reverse proxy.

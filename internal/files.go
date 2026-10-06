@@ -18,6 +18,7 @@ type Config struct {
 	Cache          string
 	Listen         string
 	Title          string
+	Version        string
 	ThumbSize      int
 	MaxImagePixels int64
 }
@@ -53,6 +54,9 @@ var videoExt = map[string]bool{
 }
 
 func New(cfg Config, web fs.FS) (*Server, error) {
+	if cfg.Version == "" {
+		cfg.Version = "dev"
+	}
 	if cfg.MaxImagePixels == 0 {
 		cfg.MaxImagePixels = DefaultMaxImagePixels
 	}
@@ -85,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/video-poster", s.handleVideoPoster)
 	mux.HandleFunc("/api/cover", s.handleCover)
 	mux.HandleFunc("/api/media", s.handleMedia)
+	mux.HandleFunc("/api/image-info", s.handleImageInfo)
 	mux.HandleFunc("/api/exif", s.handleEXIF)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -100,13 +105,13 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob:; media-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"title": s.cfg.Title})
+	writeJSON(w, http.StatusOK, map[string]any{"title": s.cfg.Title, "version": s.cfg.Version})
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
