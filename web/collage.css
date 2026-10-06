@@ -203,8 +203,8 @@
 .collage-source-tree { margin: 14px 0; font-size: .85rem; }
 .collage-tree-branch summary { min-height: 34px; display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
 .collage-tree-branch summary::-webkit-details-marker { display: none; }
-.collage-tree-branch summary::before { width: 12px; flex: 0 0 12px; content: '>'; color: var(--collage-muted); font-weight: 800; text-align: center; }
-.collage-tree-branch[open] > summary::before { content: '⌄'; }
+.collage-tree-branch summary::before { width: 6px; height: 6px; flex: 0 0 6px; margin: 0 3px; content: ''; border-right: 2px solid var(--collage-muted); border-bottom: 2px solid var(--collage-muted); transform: rotate(-45deg); transition: transform .15s ease; }
+.collage-tree-branch[open] > summary::before { transform: rotate(45deg); }
 .collage-tree-branch summary.is-active { color: var(--collage-accent); font-weight: 750; }
 .collage-tree-children { padding-left: 14px; color: var(--collage-muted); }
 .collage-source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

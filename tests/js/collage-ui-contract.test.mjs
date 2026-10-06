@@ -10,8 +10,8 @@ const cssUrl = new URL('../../web/collage.css', import.meta.url);
 
 test('editor exposes two settings-panel transforms, no thumbnail overlay, and the concise download label', async () => {
   const source = await readFile(editorUrl, 'utf8');
-  assert.match(source, /data-template-transform="x"[^>]*>↔ Слева \/ справа</);
-  assert.match(source, /data-template-transform="y"[^>]*>↕ Сверху \/ снизу</);
+  assert.match(source, /data-template-transform="x">\$\{iconMarkup\('flip-horizontal'\)\}<span>Слева \/ справа<\/span>/);
+  assert.match(source, /data-template-transform="y">\$\{iconMarkup\('flip-vertical'\)\}<span>Сверху \/ снизу<\/span>/);
   assert.doesNotMatch(source, /data-mirror-template|collage-template-mirror/);
   assert.match(source, /data-command="preflight">Скачать коллаж</);
 
@@ -29,16 +29,16 @@ test('frame thickness keeps the gap control contract under its new label', async
 
 test('crop editor exposes clockwise and counter-clockwise 90 degree rotation controls', async () => {
   const source = await readFile(editorUrl, 'utf8');
-  assert.match(source, /data-crop-action="rotate-left"[^>]*aria-label="Повернуть фотографию на 90 градусов влево"[^>]*>↶ 90°</);
-  assert.match(source, /data-crop-action="rotate-right"[^>]*aria-label="Повернуть фотографию на 90 градусов вправо"[^>]*>↷ 90°</);
+  assert.match(source, /data-crop-action="rotate-left"[^>]*aria-label="Повернуть фотографию на 90 градусов влево"[^>]*>\$\{iconMarkup\('rotate-ccw'\)\}<span>90°<\/span>/);
+  assert.match(source, /data-crop-action="rotate-right"[^>]*aria-label="Повернуть фотографию на 90 градусов вправо"[^>]*>\$\{iconMarkup\('rotate-cw'\)\}<span>90°<\/span>/);
   assert.match(source, /event\.key === '\['/);
   assert.match(source, /event\.key === '\]'/);
 });
 
 test('folder tree owns explicit closed and expanded markers', async () => {
   const css = await readFile(cssUrl, 'utf8');
-  assert.match(css, /\.collage-tree-branch summary::before\s*\{[^}]*content:\s*'>'/s);
-  assert.match(css, /\.collage-tree-branch\[open\]\s*>\s*summary::before\s*\{[^}]*content:\s*'⌄'/s);
+  assert.match(css, /\.collage-tree-branch summary::before\s*\{[^}]*transform:\s*rotate\(-45deg\)/s);
+  assert.match(css, /\.collage-tree-branch\[open\]\s*>\s*summary::before\s*\{[^}]*transform:\s*rotate\(45deg\)/s);
   assert.match(css, /summary::-webkit-details-marker\s*\{[^}]*display:\s*none/s);
 });
 
@@ -54,7 +54,7 @@ test('focus workspace exposes a collapsed template accordion, icon-only canvas f
   const css = await readFile(cssUrl, 'utf8');
   assert.match(source, /data-template-accordion[^>]*data-collapsed="true"/);
   assert.match(source, /data-template-accordion-toggle[^>]*aria-expanded="false"/);
-  assert.match(source, /data-command="toggle-canvas-focus"[^>]*>⛶<\/button>/);
+  assert.match(source, /data-command="toggle-canvas-focus"[^>]*>\$\{iconMarkup\('maximize'\)\}<\/button>/);
   assert.match(source, /data-command="toggle-canvas-zoom"/);
   assert.match(source, /data-canvas-zoom-value>100%/);
   assert.match(source, /data-photo-preview-dialog/);

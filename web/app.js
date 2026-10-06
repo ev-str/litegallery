@@ -1,5 +1,6 @@
 import {isLargePhoto, megapixels} from './collage/limits.js';
 import {isCollageSupportedPath} from './collage/support.js';
+import {iconLabelMarkup, iconMarkup} from './icons.js';
 
 const statusBox = document.querySelector('#status');
 const crumbs = document.querySelector('#breadcrumbs');
@@ -106,7 +107,7 @@ function sortMedia(items) {
 }
 
 function updateSortButton(button, descending) {
-  button.textContent = descending ? 'Z–A ↓' : 'A–Z ↑';
+  button.innerHTML = iconLabelMarkup(descending ? 'arrow-down' : 'arrow-up', descending ? 'Z–A' : 'A–Z');
   button.setAttribute('aria-pressed', String(descending));
 }
 
@@ -115,7 +116,7 @@ function updateMediaControls() {
   mediaFilter.querySelectorAll('[data-filter]').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.filter === mediaFilterKey));
   });
-  mediaDirection.textContent = mediaDescending ? '↓' : '↑';
+  mediaDirection.innerHTML = iconMarkup(mediaDescending ? 'arrow-down' : 'arrow-up');
   const dateDirection = mediaDescending ? 'Сначала новые' : 'Сначала старые';
   const nameDirection = mediaDescending ? 'От Z к A' : 'От A к Z';
   mediaDirection.title = mediaSortKey === 'date' ? dateDirection : nameDirection;
@@ -241,7 +242,7 @@ function renderMedia(items) {
       }, {once: true});
       const preview = document.createElement('span');
       preview.className = 'video-preview';
-      preview.innerHTML = '<span class="play">▶</span>';
+      preview.innerHTML = `<span class="play">${iconMarkup('play')}</span>`;
       card.append(poster, preview);
     }
     const overlay = document.createElement('span');
@@ -489,10 +490,17 @@ function move(delta) {
   showCurrent();
 }
 
-function stopSlideshow() { clearInterval(slideTimer); slideTimer = null; slideButton.textContent = '▶ Слайд-шоу'; }
+function stopSlideshow() {
+  clearInterval(slideTimer);
+  slideTimer = null;
+  slideButton.innerHTML = iconLabelMarkup('play', 'Слайд-шоу');
+  slideButton.setAttribute('aria-pressed', 'false');
+}
 function toggleSlideshow() {
   if (slideTimer) return stopSlideshow();
-  slideTimer = setInterval(() => move(1), 5000); slideButton.textContent = '⏸ Стоп';
+  slideTimer = setInterval(() => move(1), 5000);
+  slideButton.innerHTML = iconLabelMarkup('pause', 'Стоп');
+  slideButton.setAttribute('aria-pressed', 'true');
 }
 
 function fullscreenElement() {
@@ -524,8 +532,10 @@ async function toggleFullscreen(event) {
 }
 
 function updateFullscreenButton() {
-  fullscreenButton.setAttribute('aria-label', fullscreenElement() ? 'Выйти из полноэкранного режима' : 'На весь экран');
-  fullscreenButton.setAttribute('aria-pressed', String(Boolean(fullscreenElement())));
+  const active = Boolean(fullscreenElement());
+  fullscreenButton.setAttribute('aria-label', active ? 'Выйти из полноэкранного режима' : 'На весь экран');
+  fullscreenButton.setAttribute('aria-pressed', String(active));
+  fullscreenButton.innerHTML = iconMarkup(active ? 'minimize' : 'maximize');
 }
 
 function formatBytes(bytes) {
