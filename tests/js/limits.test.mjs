@@ -8,8 +8,11 @@ import {
   exceedsSafeCanvas,
   exportMemoryBudget,
   isLargePhoto,
+  MAX_EXPORT_PPI,
+  MIN_EXPORT_PPI,
   maxPpiForMemory,
   megapixels,
+  recommendedExportPpi,
 } from '../../web/collage/limits.js';
 
 const MiB = 1024 * 1024;
@@ -27,9 +30,8 @@ test('every PPI the chooser can offer above 300 fits the export memory budget', 
     for (const format of PRINT_FORMATS) {
       for (const orientation of /** @type {const} */ (['portrait', 'landscape'])) {
         for (const bleedMm of [0, 2]) {
-          // Mirrors highestSafePpi: rounded down to 25 and capped at 600.
-          const offered = Math.max(300, Math.floor(Math.min(maxPpiForMemory(format.id, orientation, bleedMm, budget), 600) / 25) * 25);
-          if (offered === 300) continue;
+          const offered = recommendedExportPpi(10_000, format.id, orientation, bleedMm, budget);
+          if (offered === MIN_EXPORT_PPI) continue;
           const dimensions = getPrintDimensions(format.id, orientation, offered, bleedMm);
           assert.ok(
             estimateExportBytes(dimensions.widthPx, dimensions.heightPx) <= budget,
@@ -39,6 +41,26 @@ test('every PPI the chooser can offer above 300 fits the export memory budget', 
       }
     }
   }
+});
+
+test('recommended PPI follows the weakest photo, rounds down to 25, and stays within 300–600', () => {
+  const budget = 512 * MiB;
+  assert.equal(recommendedExportPpi(null, '10x15', 'portrait', 0, budget), MIN_EXPORT_PPI, 'no placed photos');
+  assert.equal(recommendedExportPpi(250, '10x15', 'portrait', 0, budget), MIN_EXPORT_PPI, '300 is always offered');
+  assert.equal(recommendedExportPpi(349.9, '10x15', 'portrait', 0, budget), 325);
+  assert.equal(recommendedExportPpi(350, '10x15', 'portrait', 0, budget), 350);
+  assert.equal(recommendedExportPpi(5_000, '10x15', 'portrait', 0, budget), MAX_EXPORT_PPI);
+  for (const weakest of [301, 333, 410, 599]) {
+    assert.ok(recommendedExportPpi(weakest, '10x15', 'portrait', 0, budget) <= weakest, `never above the weakest photo (${weakest})`);
+  }
+});
+
+test('memory caps the recommendation for large formats', () => {
+  const budget = 128 * MiB;
+  const memoryLimit = maxPpiForMemory('30x45', 'portrait', 0, budget);
+  assert.ok(memoryLimit < MAX_EXPORT_PPI);
+  const offered = recommendedExportPpi(5_000, '30x45', 'portrait', 0, budget);
+  assert.ok(offered <= Math.max(MIN_EXPORT_PPI, memoryLimit));
 });
 
 test('large print formats are flagged against the mobile canvas limit', () => {

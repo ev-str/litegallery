@@ -4,14 +4,52 @@
 
 - Refresh the visual hierarchy with an album title, media statistics, and a
   unified filter and sorting toolbar.
-- Replace text symbols with consistent embedded SVG icons.
 - Refine folder covers and media cards with improved typography, depth, loading
   placeholders, and restrained motion.
-- Introduce a dark cinematic viewer with auto-hiding controls.
 - Present EXIF metadata as a side panel on larger screens and a bottom sheet on
   phones.
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
+
+## 0.2.2 — 2026-10-06
+
+### Added
+
+- Embedded SVG icon sprite replaces text symbols in the gallery, viewer, and
+  collage editor.
+- Dark full-screen viewer: borderless media, glass controls, and a caption
+  overlay. Controls fade after 2.5 seconds without input and return on any
+  pointer, touch, or key event; they stay visible while EXIF is open, and the
+  control that has keyboard focus never hides. Opening the viewer focuses the
+  viewer itself, so no button starts with a focus ring.
+- `make release` builds release binaries and a `SHA256SUMS` file with bare
+  file names into `dist/`, and refuses untagged or dirty checkouts.
+
+### Changed
+
+- Mirrored duplicates are removed from the template catalogue for every photo
+  count. Their old IDs stay loadable through a compatibility registry that
+  keeps the original cell order, so existing projects open unchanged.
+- The export PPI offered in the JPEG dialog is derived from the preflight
+  "weakest frame" value, so it never exceeds the PPI shown next to it.
+
+### Fixed
+
+- The thumbnail server no longer keeps a lock entry for every thumbnail ever
+  requested, so memory stays flat on long-running servers. Serving an already
+  cached thumbnail no longer waits behind other requests for the same file.
+
+### Development
+
+- `web/app.js` is split into the gallery (`app.js`), the viewer (`viewer.js`),
+  collage selection (`collage-selection.js`), video posters
+  (`video-posters.js`), and shared formatting helpers (`format.js`).
+- `recommendedExportPpi` in `web/collage/limits.js` holds the PPI rules and is
+  unit-tested directly.
+- Browser tests for the viewer: navigation, slideshow, idle hiding, keyboard
+  focus, and EXIF; the offered export PPI is checked against the weakest frame.
+- Unit test that every referenced icon exists in the sprite.
+- Documentation screenshots include the viewer.
 
 ## 0.2.1 — 2026-10-06
 

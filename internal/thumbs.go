@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
@@ -16,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 
 	_ "golang.org/x/image/bmp"
 	xdraw "golang.org/x/image/draw"
@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	thumbLocks   sync.Map
+	thumbLocks   keyedMutex
 	thumbWorkers = make(chan struct{}, 2)
 )
 
@@ -47,30 +47,41 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	}
 	cached, key := s.thumbnailCachePath(abs, info)
 
-	lockValue, _ := thumbLocks.LoadOrStore(key, &sync.Mutex{})
-	lock := lockValue.(*sync.Mutex)
-	lock.Lock()
-	defer lock.Unlock()
-
-	if _, err := os.Stat(cached); errors.Is(err, os.ErrNotExist) {
-		select {
-		case thumbWorkers <- struct{}{}:
-		case <-r.Context().Done():
-			return
-		}
-		err := makeThumbnail(abs, cached, s.cfg.ThumbSize, s.cfg.MaxImagePixels)
-		<-thumbWorkers
-		if err != nil {
-			http.Error(w, "cannot create thumbnail", http.StatusUnsupportedMediaType)
-			return
-		}
-	} else if err != nil {
+	switch err := s.ensureThumbnail(r.Context(), abs, cached, key); {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return
+	case errors.Is(err, errThumbnailCache):
 		http.Error(w, "cannot read thumbnail cache", http.StatusInternalServerError)
+		return
+	case err != nil:
+		http.Error(w, "cannot create thumbnail", http.StatusUnsupportedMediaType)
 		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	http.ServeFile(w, r, cached)
+}
+
+var errThumbnailCache = errors.New("cannot read thumbnail cache")
+
+// ensureThumbnail generates the cached thumbnail once per key. Only generation
+// holds the per-key lock; serving the finished file does not.
+func (s *Server) ensureThumbnail(ctx context.Context, source, cached, key string) error {
+	unlock := thumbLocks.Lock(key)
+	defer unlock()
+
+	if _, err := os.Stat(cached); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("%w: %v", errThumbnailCache, err)
+	}
+	select {
+	case thumbWorkers <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-thumbWorkers }()
+	return makeThumbnail(source, cached, s.cfg.ThumbSize, s.cfg.MaxImagePixels)
 }
 
 func (s *Server) handleVideoPoster(w http.ResponseWriter, r *http.Request) {

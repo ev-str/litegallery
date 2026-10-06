@@ -108,6 +108,12 @@ Date sorting uses this order:
 2. Container creation time for supported MP4-family videos.
 3. Filesystem creation time as a fallback.
 
+Photos and videos open in a dark full-screen viewer. Its controls fade out
+after a short pause and return on any mouse, touch, or keyboard input; arrow
+keys and swipes move between items, and Space starts a slideshow.
+
+![Dark full-screen viewer](docs/screenshots/viewer.png)
+
 The viewer loads detailed EXIF only when its info button is opened. The cache
 warmer maintains compact per-directory metadata manifests so normal folder
 browsing does not rescan every original file.
@@ -321,6 +327,23 @@ changed spec immediately after editing it. Tag a test as essential with
 `test('…', {tag: '@essential'}, async …)` only when it covers a core user flow;
 keep the essential suite short. Failure screenshots and traces are written to
 the temporary runtime directory printed in the report.
+
+### Releases
+
+Release assets are built from a clean checkout of a release tag:
+
+```sh
+git switch main && git pull --ff-only
+git tag -a v0.2.2 -m "LiteGallery v0.2.2"
+git push origin v0.2.2
+make release
+gh release create v0.2.2 dist/* --title "LiteGallery v0.2.2" --notes-file <notes.md>
+```
+
+`make release` refuses to build when `git describe` is not an exact `vX.Y.Z`
+tag or the tree has uncommitted changes. It writes the FreeBSD and Linux
+binaries plus a `SHA256SUMS` file with bare file names to `dist/`, so
+downloads can be verified with `shasum -a 256 -c SHA256SUMS`.
 
 ### Documentation screenshots
 

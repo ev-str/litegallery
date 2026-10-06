@@ -11,8 +11,8 @@ test('template flips live in settings, combine independently, and never overlay 
   await openTemplateList(page);
   await panel.locator('[data-template-id="4-magazine-corner"]').click();
 
-  const horizontal = panel.getByRole('button', {name: '↔ Слева / справа'});
-  const vertical = panel.getByRole('button', {name: '↕ Сверху / снизу'});
+  const horizontal = panel.getByRole('button', {name: 'Слева / справа'});
+  const vertical = panel.getByRole('button', {name: 'Сверху / снизу'});
   await expect(horizontal).toBeEnabled();
   await expect(vertical).toBeEnabled();
   await expect(horizontal).toHaveAttribute('aria-pressed', 'false');
@@ -74,7 +74,7 @@ test('focus mode collapses templates, enlarges the canvas, and opens a full phot
   const canvas = panel.locator('[data-preview]');
   const before = await canvas.boundingBox();
   const focus = panel.locator('[data-command="toggle-canvas-focus"]');
-  await expect(focus).toHaveText('⛶');
+  await expect(focus.locator('use')).toHaveAttribute('href', '#icon-maximize');
   await focus.click();
   await expect(panel).toHaveAttribute('data-canvas-focus', 'true');
   await expect(panel.locator('.collage-sources-panel')).toBeHidden();

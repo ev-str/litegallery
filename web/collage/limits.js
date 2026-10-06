@@ -11,6 +11,11 @@ export const MAX_SAFE_CANVAS_PIXELS = 16_777_216;
 /** Source photos above this size may exhaust browser memory on phones and tablets. */
 export const LARGE_PHOTO_MEGAPIXELS = 40;
 
+/** PPI range offered by the export dialog. */
+export const MIN_EXPORT_PPI = 300;
+export const MAX_EXPORT_PPI = 600;
+export const EXPORT_PPI_STEP = 25;
+
 const MIN_EXPORT_BUDGET_BYTES = 128 * 1024 * 1024;
 const MAX_EXPORT_BUDGET_BYTES = 512 * 1024 * 1024;
 const BUDGET_BYTES_PER_DEVICE_GIB = 128 * 1024 * 1024;
@@ -40,6 +45,23 @@ export function exportMemoryBudget(deviceMemoryGiB = navigatorDeviceMemory()) {
 export function maxPpiForMemory(formatId, orientation, bleedMm, budgetBytes = exportMemoryBudget()) {
   const at300 = getPrintDimensions(formatId, orientation, 300, bleedMm);
   return 300 * Math.sqrt(budgetBytes / estimateExportBytes(at300.widthPx, at300.heightPx));
+}
+
+/**
+ * Highest PPI the export dialog offers. It is limited by the weakest placed
+ * photo (the preflight "weakest frame" value), the memory budget, and
+ * MAX_EXPORT_PPI, rounded down to EXPORT_PPI_STEP and never below
+ * MIN_EXPORT_PPI, which is always offered.
+ * @param {number|null} weakestPpi from runPreflight(); null when no photo is placed
+ * @param {string} formatId
+ * @param {'portrait'|'landscape'} orientation
+ * @param {number} bleedMm
+ * @param {number} [budgetBytes]
+ */
+export function recommendedExportPpi(weakestPpi, formatId, orientation, bleedMm, budgetBytes = exportMemoryBudget()) {
+  const sourceLimit = weakestPpi ?? MIN_EXPORT_PPI;
+  const raw = Math.min(sourceLimit, maxPpiForMemory(formatId, orientation, bleedMm, budgetBytes), MAX_EXPORT_PPI);
+  return Math.max(MIN_EXPORT_PPI, Math.floor(raw / EXPORT_PPI_STEP) * EXPORT_PPI_STEP);
 }
 
 /** @param {number} widthPx @param {number} heightPx */

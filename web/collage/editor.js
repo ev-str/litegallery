@@ -7,7 +7,8 @@ import {exportJpeg} from './export.js';
 import {EDGE_PRESETS} from './frames.js';
 import {jpegFilename, projectFilename} from './filenames.js';
 import {getPrintDimensions, getPrintFormat, PRINT_FORMATS} from './formats.js';
-import {exceedsSafeCanvas, maxPpiForMemory} from './limits.js';
+import {iconMarkup} from '../icons.js';
+import {exceedsSafeCanvas, MIN_EXPORT_PPI, recommendedExportPpi} from './limits.js';
 import {centeredCrop, clampCrop, cropDistortionPercent, effectiveCropPpi, normalizePhotoRotation, rectToPixels, refitCropAroundCenter, rotatedSourceDimensions} from './geometry.js';
 import {assertProject, createPlacementId, createProject, getCellAspect, validateProject} from './model.js';
 import {BACKGROUND_PALETTE, createFramePalette} from './palette.js';
@@ -38,35 +39,35 @@ const appConfigReady = fetch('/api/config', {credentials: 'same-origin'})
 dialog.innerHTML = `
   <div class="collage-shell">
     <header class="collage-toolbar">
-      <button type="button" data-command="close" aria-label="Закрыть редактор">←</button>
+      <button type="button" data-command="close" aria-label="Закрыть редактор">${iconMarkup('arrow-left')}</button>
       <input class="collage-project-name" data-project-name type="text" maxlength="80" aria-label="Название коллажа" placeholder="Название коллажа">
       <div class="collage-toolbar-spacer"></div>
-      <button type="button" data-command="undo" title="Отменить" aria-label="Отменить последнее действие">↶</button>
-      <button type="button" data-command="redo" title="Повторить" aria-label="Повторить отменённое действие">↷</button>
+      <button type="button" data-command="undo" title="Отменить" aria-label="Отменить последнее действие">${iconMarkup('undo')}</button>
+      <button type="button" data-command="redo" title="Повторить" aria-label="Повторить отменённое действие">${iconMarkup('redo')}</button>
       <details class="collage-history"><summary>История · <span data-history-count>0 из 20</span></summary><ol data-history-list></ol></details>
       <button type="button" data-command="load-project">Открыть</button>
       <div class="collage-save-group"><select data-save-kind aria-label="Формат проекта"><option value="json">Только разметка</option><option value="zip">Разметка и фото</option></select><button type="button" data-command="save-project">Сохранить</button></div>
       <button type="button" class="primary" data-command="preflight">Скачать коллаж</button>
     </header>
     <section class="collage-templates" aria-label="Шаблоны" data-template-accordion data-collapsed="true">
-      <button type="button" class="collage-template-accordion-toggle" data-template-accordion-toggle aria-expanded="false" aria-controls="collage-template-list"><strong data-template-copy>Шаблоны для 2 фотографий</strong><span aria-hidden="true">›</span></button>
+      <button type="button" class="collage-template-accordion-toggle" data-template-accordion-toggle aria-expanded="false" aria-controls="collage-template-list"><strong data-template-copy>Шаблоны для 2 фотографий</strong><span class="collage-accordion-icon">${iconMarkup('chevron-right')}</span></button>
       <div class="collage-template-list" id="collage-template-list" data-template-list hidden></div>
     </section>
     <main class="collage-workspace">
       <aside class="collage-panel collage-sources-panel" data-mobile-panel="photos">
         <section class="collage-gallery-block" data-source-accordion="gallery" data-collapsed="false">
-          <header><span><strong>Галерея</strong><small data-gallery-folder>Все фото</small></span><button type="button" class="collage-accordion-toggle" data-source-accordion-toggle="gallery" aria-expanded="true" aria-controls="collage-gallery-content" aria-label="Свернуть галерею">⌄</button></header>
+          <header><span><strong>Галерея</strong><small data-gallery-folder>Все фото</small></span><button type="button" class="collage-accordion-toggle" data-source-accordion-toggle="gallery" aria-expanded="true" aria-controls="collage-gallery-content" aria-label="Свернуть галерею">${iconMarkup('chevron-down')}</button></header>
           <div class="collage-source-panel-content" id="collage-gallery-content"><div data-source-tree></div><div class="collage-source-grid" data-source-grid></div></div>
         </section>
         <section class="collage-session-block" data-source-accordion="session" data-collapsed="false">
-          <header><span><strong>В коллаже · <span data-session-count>0</span></strong><small>Фотографии этой сессии</small></span><button type="button" class="collage-accordion-toggle" data-source-accordion-toggle="session" aria-expanded="true" aria-controls="collage-session-content" aria-label="Свернуть фотографии этой сессии">⌄</button></header>
+          <header><span><strong>В коллаже · <span data-session-count>0</span></strong><small>Фотографии этой сессии</small></span><button type="button" class="collage-accordion-toggle" data-source-accordion-toggle="session" aria-expanded="true" aria-controls="collage-session-content" aria-label="Свернуть фотографии этой сессии">${iconMarkup('chevron-down')}</button></header>
           <div class="collage-session-grid collage-source-panel-content" id="collage-session-content" data-session-grid></div>
         </section>
       </aside>
       <section class="collage-canvas-column" data-mobile-panel="canvas">
         <div class="collage-canvas-view-controls">
-          <button type="button" class="collage-canvas-zoom-toggle" data-command="toggle-canvas-zoom" title="Включить масштабирование и перемещение" aria-label="Включить масштабирование и перемещение" aria-pressed="false">🔍 <span data-canvas-zoom-value>100%</span></button>
-          <button type="button" class="collage-canvas-focus-toggle" data-command="toggle-canvas-focus" title="Показать коллаж на весь экран" aria-label="Показать коллаж на весь экран">⛶</button>
+          <button type="button" class="collage-canvas-zoom-toggle" data-command="toggle-canvas-zoom" title="Включить масштабирование и перемещение" aria-label="Включить масштабирование и перемещение" aria-pressed="false">${iconMarkup('search')}<span data-canvas-zoom-value>100%</span></button>
+          <button type="button" class="collage-canvas-focus-toggle" data-command="toggle-canvas-focus" title="Показать коллаж на весь экран" aria-label="Показать коллаж на весь экран">${iconMarkup('maximize')}</button>
         </div>
         <div class="collage-cell-actions" data-cell-actions hidden>
           <button type="button" data-command="crop">Кроп</button>
@@ -79,7 +80,7 @@ dialog.innerHTML = `
       </section>
       <aside class="collage-panel collage-settings" data-mobile-panel="settings">
         <section><div class="collage-setting-title"><strong>Фотографий</strong><div class="collage-stepper"><button type="button" data-count="-1" aria-label="Уменьшить количество фотографий">−</button><span data-photo-count>2</span><button type="button" data-count="1" aria-label="Увеличить количество фотографий">+</button></div></div></section>
-        <section class="collage-template-transforms" aria-label="Отражение шаблона"><button type="button" data-template-transform="x">↔ Слева / справа</button><button type="button" data-template-transform="y">↕ Сверху / снизу</button></section>
+        <section class="collage-template-transforms" aria-label="Отражение шаблона"><button type="button" data-template-transform="x">${iconMarkup('flip-horizontal')}<span>Слева / справа</span></button><button type="button" data-template-transform="y">${iconMarkup('flip-vertical')}<span>Сверху / снизу</span></button></section>
         <section class="collage-print-settings"><strong>Формат печати</strong><div class="collage-print-fields"><label>Размер<select data-print-format aria-label="Формат печати">${PRINT_FORMATS.map(format => `<option value="${format.id}">${format.label}</option>`).join('')}</select></label><label>Ориентация<select data-print-orientation aria-label="Ориентация печати"><option value="portrait">Вертикально</option><option value="landscape">Горизонтально</option></select></label></div><p data-print-size aria-live="polite"></p></section>
         <section><strong>Рамка фотографии</strong><div class="collage-segments" data-frame-modes><button data-frame-mode="none">Нет</button><button data-frame-mode="white">Белая</button><button data-frame-mode="color">Цвет</button></div><details class="collage-frame-colors"><summary>Цвет</summary><div class="collage-swatches" data-frame-palette></div><input type="color" data-frame-picker aria-label="Свой цвет рамки"></details></section>
         <section><strong>Форма края</strong><div class="collage-edge-grid" data-edge-grid></div></section>
@@ -95,12 +96,12 @@ dialog.innerHTML = `
 
 const auxiliary = document.createElement('div');
 auxiliary.innerHTML = `
-  <dialog class="collage-modal" data-crop-dialog><form method="dialog" class="collage-modal-card collage-crop-card"><header><strong>Кроп фотографии</strong><button value="cancel" aria-label="Закрыть">×</button></header><div class="collage-crop-tools"><label><input type="radio" name="crop-mode" value="proportional" checked> Сохранять пропорции</label><label><input type="radio" name="crop-mode" value="free"> Искажать пропорции</label></div><div class="collage-crop-stage" tabindex="0" aria-label="Область кропа. Стрелки двигают рамку, плюс и минус меняют масштаб, квадратные скобки поворачивают фото"><div class="collage-crop-image-box"><img alt="Редактируемая фотография"><div class="collage-crop-frame"><i data-crop-handle="nw"></i><i data-crop-handle="n"></i><i data-crop-handle="ne"></i><i data-crop-handle="e"></i><i data-crop-handle="se"></i><i data-crop-handle="s"></i><i data-crop-handle="sw"></i><i data-crop-handle="w"></i></div></div></div><div class="collage-crop-quality" data-crop-quality role="status" aria-live="polite"></div><footer><button type="button" data-crop-action="reset">Сбросить</button><button type="button" data-crop-action="center">По центру</button><span class="collage-crop-rotation" role="group" aria-label="Поворот фотографии"><button type="button" data-crop-action="rotate-left" aria-label="Повернуть фотографию на 90 градусов влево">↶ 90°</button><button type="button" data-crop-action="rotate-right" aria-label="Повернуть фотографию на 90 градусов вправо">↷ 90°</button></span><button type="button" data-crop-action="minus" aria-label="Уменьшить масштаб рамки">−</button><button type="button" data-crop-action="plus" aria-label="Увеличить масштаб рамки">+</button><span></span><button value="cancel">Отмена</button><button type="button" class="primary" data-crop-action="done">Готово</button></footer></form></dialog>
-  <dialog class="collage-modal" data-preflight-dialog><div class="collage-modal-card"><header><strong>Проверка перед печатью</strong><button type="button" data-modal-close aria-label="Закрыть">×</button></header><div data-preflight-content></div><footer><button type="button" data-modal-close>Вернуться</button><button type="button" class="primary" data-command="open-export">Настройки скачивания</button></footer></div></dialog>
-  <dialog class="collage-modal" data-save-dialog><div class="collage-modal-card collage-save-card"><header><strong>Сохранить проект</strong><button type="button" data-save-close aria-label="Закрыть">×</button></header><p>Файл проекта будет сохранён как</p><strong class="collage-save-filename" data-project-filename></strong><footer><button type="button" data-save-close>Отмена</button><button type="button" class="primary" data-command="confirm-save-project">Сохранить</button></footer></div></dialog>
-  <dialog class="collage-modal" data-export-dialog><div class="collage-modal-card"><header><strong>Скачать JPEG</strong><button type="button" data-modal-close aria-label="Закрыть">×</button></header><div class="collage-export-form"><label>Формат<select data-export-format></select></label><label>Ориентация<select data-export-orientation><option value="portrait">Вертикально</option><option value="landscape">Горизонтально</option></select></label><label>Качество<select data-export-ppi><option value="300">300 PPI · для печати</option></select></label><label class="collage-export-bleed"><input type="checkbox" data-export-bleed> <span>Запас под обрезку 2 мм</span></label><div class="collage-export-summary" data-export-summary></div><p class="collage-export-warning" data-export-canvas-warning role="note" hidden>Этот формат может не собраться в браузере на телефоне или планшете. На компьютере ограничений нет.</p><div class="collage-save-filename" data-export-filename></div><progress data-export-progress max="1" value="0" aria-label="Прогресс подготовки JPEG" hidden></progress><p data-export-status role="status" aria-live="polite"></p></div><footer><button type="button" data-command="cancel-export" hidden>Отменить</button><span></span><button type="button" class="primary" data-command="export">Скачать на устройство</button></footer></div></dialog>
+  <dialog class="collage-modal" data-crop-dialog><form method="dialog" class="collage-modal-card collage-crop-card"><header><strong>Кроп фотографии</strong><button value="cancel" aria-label="Закрыть">${iconMarkup('x')}</button></header><div class="collage-crop-tools"><label><input type="radio" name="crop-mode" value="proportional" checked> Сохранять пропорции</label><label><input type="radio" name="crop-mode" value="free"> Искажать пропорции</label></div><div class="collage-crop-stage" tabindex="0" aria-label="Область кропа. Стрелки двигают рамку, плюс и минус меняют масштаб, квадратные скобки поворачивают фото"><div class="collage-crop-image-box"><img alt="Редактируемая фотография"><div class="collage-crop-frame"><i data-crop-handle="nw"></i><i data-crop-handle="n"></i><i data-crop-handle="ne"></i><i data-crop-handle="e"></i><i data-crop-handle="se"></i><i data-crop-handle="s"></i><i data-crop-handle="sw"></i><i data-crop-handle="w"></i></div></div></div><div class="collage-crop-quality" data-crop-quality role="status" aria-live="polite"></div><footer><button type="button" data-crop-action="reset">Сбросить</button><button type="button" data-crop-action="center">По центру</button><span class="collage-crop-rotation" role="group" aria-label="Поворот фотографии"><button type="button" data-crop-action="rotate-left" aria-label="Повернуть фотографию на 90 градусов влево">${iconMarkup('rotate-ccw')}<span>90°</span></button><button type="button" data-crop-action="rotate-right" aria-label="Повернуть фотографию на 90 градусов вправо">${iconMarkup('rotate-cw')}<span>90°</span></button></span><button type="button" data-crop-action="minus" aria-label="Уменьшить масштаб рамки">−</button><button type="button" data-crop-action="plus" aria-label="Увеличить масштаб рамки">+</button><span></span><button value="cancel">Отмена</button><button type="button" class="primary" data-crop-action="done">Готово</button></footer></form></dialog>
+  <dialog class="collage-modal" data-preflight-dialog><div class="collage-modal-card"><header><strong>Проверка перед печатью</strong><button type="button" data-modal-close aria-label="Закрыть">${iconMarkup('x')}</button></header><div data-preflight-content></div><footer><button type="button" data-modal-close>Вернуться</button><button type="button" class="primary" data-command="open-export">Настройки скачивания</button></footer></div></dialog>
+  <dialog class="collage-modal" data-save-dialog><div class="collage-modal-card collage-save-card"><header><strong>Сохранить проект</strong><button type="button" data-save-close aria-label="Закрыть">${iconMarkup('x')}</button></header><p>Файл проекта будет сохранён как</p><strong class="collage-save-filename" data-project-filename></strong><footer><button type="button" data-save-close>Отмена</button><button type="button" class="primary" data-command="confirm-save-project">Сохранить</button></footer></div></dialog>
+  <dialog class="collage-modal" data-export-dialog><div class="collage-modal-card"><header><strong>Скачать JPEG</strong><button type="button" data-modal-close aria-label="Закрыть">${iconMarkup('x')}</button></header><div class="collage-export-form"><label>Формат<select data-export-format></select></label><label>Ориентация<select data-export-orientation><option value="portrait">Вертикально</option><option value="landscape">Горизонтально</option></select></label><label>Качество<select data-export-ppi><option value="300">300 PPI · для печати</option></select></label><label class="collage-export-bleed"><input type="checkbox" data-export-bleed> <span>Запас под обрезку 2 мм</span></label><div class="collage-export-summary" data-export-summary></div><p class="collage-export-warning" data-export-canvas-warning role="note" hidden>Этот формат может не собраться в браузере на телефоне или планшете. На компьютере ограничений нет.</p><div class="collage-save-filename" data-export-filename></div><progress data-export-progress max="1" value="0" aria-label="Прогресс подготовки JPEG" hidden></progress><p data-export-status role="status" aria-live="polite"></p></div><footer><button type="button" data-command="cancel-export" hidden>Отменить</button><span></span><button type="button" class="primary" data-command="export">Скачать на устройство</button></footer></div></dialog>
   <dialog class="collage-modal" data-exit-dialog><div class="collage-modal-card collage-exit-card"><header><strong data-exit-heading>Сохранить изменения?</strong></header><p data-exit-message>В проекте есть несохранённые изменения.</p><label>Сохранить проект<select data-exit-save-kind><option value="json">Только разметка</option><option value="zip">Разметка и фото</option></select></label><strong class="collage-save-filename" data-exit-filename></strong><p data-exit-size></p><footer><button type="button" data-exit="stay">Остаться</button><button type="button" data-exit="discard">Выйти без сохранения</button><button type="button" class="primary" data-exit="save">Сохранить и выйти</button></footer></div></dialog>
-  <dialog class="collage-modal collage-photo-preview" data-photo-preview-dialog><div class="collage-modal-card"><header><strong data-photo-preview-name>Просмотр фотографии</strong><span></span><button type="button" data-photo-preview-zoom title="Включить масштабирование и перемещение" aria-label="Включить масштабирование и перемещение" aria-pressed="false">🔍 <span data-photo-preview-zoom-value>100%</span></button><button type="button" data-photo-preview-close aria-label="Закрыть просмотр фотографии">×</button></header><div class="collage-photo-preview-stage"><span class="collage-preview-spinner" aria-hidden="true"></span><img alt=""></div></div></dialog>`;
+  <dialog class="collage-modal collage-photo-preview" data-photo-preview-dialog><div class="collage-modal-card"><header><strong data-photo-preview-name>Просмотр фотографии</strong><span></span><button type="button" data-photo-preview-zoom title="Включить масштабирование и перемещение" aria-label="Включить масштабирование и перемещение" aria-pressed="false">${iconMarkup('search')}<span data-photo-preview-zoom-value>100%</span></button><button type="button" data-photo-preview-close aria-label="Закрыть просмотр фотографии">${iconMarkup('x')}</button></header><div class="collage-photo-preview-stage"><span class="collage-preview-spinner" aria-hidden="true"></span><img alt=""></div></div></dialog>`;
 document.body.append(...auxiliary.children);
 
 const canvas = /** @type {HTMLCanvasElement} */ (dialog.querySelector('[data-preview]'));
@@ -777,7 +778,7 @@ function renderSourceAccordions() {
     content.hidden = !open;
     button.setAttribute('aria-expanded', String(open));
     button.setAttribute('aria-label', `${open ? 'Свернуть' : 'Развернуть'} ${panel === 'gallery' ? 'галерею' : 'фотографии этой сессии'}`);
-    button.textContent = open ? '⌄' : '›';
+    button.innerHTML = iconMarkup(open ? 'chevron-down' : 'chevron-right');
     button.disabled = open && !otherOpen;
   }
 }
@@ -796,8 +797,8 @@ function renderTemplateAccordion() {
   list.hidden = !templatePanelOpen;
   button.setAttribute('aria-expanded', String(templatePanelOpen));
   button.setAttribute('aria-label', templatePanelOpen ? 'Свернуть список шаблонов' : 'Развернуть список шаблонов');
-  const icon = button.querySelector('span');
-  if (icon) icon.textContent = templatePanelOpen ? '⌄' : '›';
+  const icon = button.querySelector('.collage-accordion-icon');
+  if (icon) icon.innerHTML = iconMarkup(templatePanelOpen ? 'chevron-down' : 'chevron-right');
 }
 
 function toggleCanvasFocus() {
@@ -809,7 +810,7 @@ function renderCanvasFocus() {
   dialog.dataset.canvasFocus = String(canvasFocusOpen);
   const button = /** @type {HTMLButtonElement|null} */ (dialog.querySelector('.collage-canvas-focus-toggle'));
   if (!button) return;
-  button.textContent = canvasFocusOpen ? '×' : '⛶';
+  button.innerHTML = iconMarkup(canvasFocusOpen ? 'x' : 'maximize');
   button.title = canvasFocusOpen ? 'Выйти из полноэкранного просмотра' : 'Показать коллаж на весь экран';
   button.setAttribute('aria-label', button.title);
   window.requestAnimationFrame(() => { if (store) drawPreview(store.getState()); });
@@ -1435,7 +1436,7 @@ function updateExportSummary() {
   let weakest = '—';
   if (store) {
     const state = store.getState();
-    const preflight = runPreflight(toRenderProject(state, false, 0), {widthMm: dimensions.trimWidthMm, heightMm: dimensions.trimHeightMm, ppi: settings.ppi, bleedMm: settings.bleedMm}, Object.fromEntries(Object.values(state.sources).map(source => [source.id, {width: source.width, height: source.height, available: true}])));
+    const preflight = runPreflight(toRenderProject(state, false, 0), {widthMm: dimensions.trimWidthMm, heightMm: dimensions.trimHeightMm, ppi: settings.ppi, bleedMm: settings.bleedMm}, availableSources(state));
     weakest = preflight.weakestPpi ? `${Math.round(preflight.weakestPpi)} PPI` : '—';
   }
   const summary = exportDialog.querySelector('[data-export-summary]');
@@ -1476,25 +1477,14 @@ function updatePpiOptions(preferred) {
 
 /** @param {ProjectState} state @param {string} formatId @param {'portrait'|'landscape'} orientation @param {number} bleedMm */
 function highestSafePpi(state, formatId, orientation, bleedMm) {
-  const format = getPrintFormat(formatId);
-  const widthMm = orientation === 'portrait' ? format.widthMm : format.heightMm;
-  const heightMm = orientation === 'portrait' ? format.heightMm : format.widthMm;
-  const template = getTemplate(state.layout.templateId);
-  let sourceLimit = Infinity;
-  state.layout.order.forEach((placementId, index) => {
-    if (!placementId) return;
-    const placement = state.placements[placementId];
-    const source = placement && state.sources[placement.sourceId];
-    const cell = template.cells[index];
-    if (!placement || !source || !cell) return;
-    const dimensions = rotatedSourceDimensions(source.width, source.height, placement.rotation);
-    const horizontal = dimensions.width * placement.crop.width / (widthMm * cell.rect.width / 25.4);
-    const vertical = dimensions.height * placement.crop.height / (heightMm * cell.rect.height / 25.4);
-    sourceLimit = Math.min(sourceLimit, horizontal, vertical);
-  });
-  const memoryLimit = maxPpiForMemory(formatId, orientation, bleedMm);
-  const raw = Math.min(Number.isFinite(sourceLimit) ? sourceLimit : 300, memoryLimit, 600);
-  return Math.max(300, Math.floor(raw / 25) * 25);
+  const dimensions = getPrintDimensions(formatId, orientation, MIN_EXPORT_PPI, bleedMm);
+  const {weakestPpi} = runPreflight(toRenderProject(state, false, 0), {widthMm: dimensions.trimWidthMm, heightMm: dimensions.trimHeightMm, ppi: MIN_EXPORT_PPI, bleedMm}, availableSources(state));
+  return recommendedExportPpi(weakestPpi, formatId, orientation, bleedMm);
+}
+
+/** @param {ProjectState} state */
+function availableSources(state) {
+  return Object.fromEntries(Object.values(state.sources).map(source => [source.id, {width: source.width, height: source.height, available: true}]));
 }
 
 /** @param {string} kind */

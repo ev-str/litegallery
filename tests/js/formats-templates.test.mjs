@@ -130,10 +130,22 @@ test('template validator rejects gaps, overlaps, and out-of-bounds cells', () =>
   );
 });
 
-test('portrait-first templates cover counts three through twelve with exact partitions and at most three frames per column', () => {
+test('portrait-first canonical templates cover counts three through twelve with at most three frames per column', () => {
+  const portraitIds = new Map([
+    [3, ['3-portrait-centre', '3-portrait-left']],
+    [4, ['4-portrait-left']],
+    [5, ['5-portrait-left']],
+    [6, ['6-grid-3x2']],
+    [7, ['7-portrait-left']],
+    [8, ['8-portrait-left']],
+    [9, ['9-grid']],
+    [10, ['10-portrait-left']],
+    [11, ['11-portrait-left']],
+    [12, ['12-grid-4x3']],
+  ]);
   assert.equal(getTemplatesForCount(2).some(template => template.family === 'portrait'), false);
   for (let count = 3; count <= 12; count += 1) {
-    const portraitTemplates = getTemplatesForCount(count).filter(template => template.family === 'portrait');
+    const portraitTemplates = portraitIds.get(count).map(getTemplate);
     assert.ok(portraitTemplates.length > 0, `missing portrait-first template for ${count} photos`);
     for (const template of portraitTemplates) {
       assert.doesNotThrow(() => assertTemplatePartition(template));

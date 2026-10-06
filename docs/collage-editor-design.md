@@ -220,11 +220,12 @@ The approved 2–8 photo review removed these template definitions:
   `6-staggered-6`;
 - 8 photos: `8-columns-2-6-equal` and `8-staggered-4`.
 
-The resulting visible catalogue contains 4, 6, 12, 15, 15, 18, and 16
-templates for photo counts 2 through 8 respectively. The underlying mirrored
-definition `8-columns-6-2-equal` intentionally remains for now and becomes the
-visible representative of its equivalence class. A broader normalization of
-legacy definitions is a separate future pass.
+The resulting canonical catalogue contains 4, 6, 12, 15, 15, 18, and 16
+templates for photo counts 2 through 8 respectively. Reflection-equivalent
+definitions are removed from the public catalogue for every supported photo
+count. Their old IDs remain loadable through a private compatibility registry
+that preserves the original cell order, so existing projects open without
+moving photographs between cells.
 
 Future visual catalogue reviews must number every preview and add a compact
 structural description. For column layouts it states the number of columns,
@@ -283,7 +284,8 @@ the server thumbnails do.
   by both the gallery selection and the editor.
 - Memory limits live in `web/collage/limits.js`. The PPI chooser and the export
   share one budget and per-pixel estimate, so the chooser never offers a PPI
-  that the export would reject. The selection bar warns about photos above
+  that the export would reject. `recommendedExportPpi` derives the offered PPI
+  from the preflight "weakest frame" value, so the two never disagree. The selection bar warns about photos above
   `LARGE_PHOTO_MEGAPIXELS` using `/api/image-info`, and the export dialog warns
   when a format exceeds `MAX_SAFE_CANVAS_PIXELS`. Warnings never block the
   workflow; the thresholds are tuned by testing on real devices.

@@ -20,6 +20,17 @@ test.describe('documentation screenshots', () => {
 
     await page.getByRole('button', {name: 'Открыть папку Nature'}).click();
     await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(5);
+
+    await page.locator('#mediaGrid .media-card.image').nth(1).click();
+    const viewer = page.locator('#viewer');
+    await expect(viewer.locator('.stage img')).toBeVisible();
+    await expect.poll(() => viewer.locator('.stage img').evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
+    await page.mouse.move(640, 420);
+    await expect(viewer).toHaveAttribute('data-idle', 'false');
+    await page.screenshot({path: resolve(screenshots, 'viewer.png')});
+    await page.keyboard.press('Escape');
+    await expect(viewer).toBeHidden();
+
     await page.locator('#collageMode').click();
     const photoButtons = page.locator('#mediaGrid .media-card.image');
     await expect(photoButtons).toHaveCount(5);
