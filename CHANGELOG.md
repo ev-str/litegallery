@@ -15,6 +15,19 @@
 
 ## Unreleased
 
+### Changed
+
+- The selection bar warns about photos larger than 40 megapixels, measured
+  from their decoded dimensions, instead of about the total file size.
+- The JPEG export dialog warns when a format exceeds the canvas size that phone
+  and tablet browsers can render.
+- The PPI chooser and the export share one memory model. If an export has to
+  fall back to 300 PPI, the file name and status show the PPI actually used,
+  and any failed export above 300 PPI offers a retry at 300 PPI.
+- Collage format support is defined once and shared by the gallery and the
+  editor; JSON and ZIP projects that reference TIFF photos are rejected on
+  import with the affected names.
+
 ### Development
 
 - Browser tests cover EXIF orientations 1, 5 (mirrored), and 6: image-info,

@@ -174,9 +174,11 @@ detailed product and technical decisions.
 ### Limitations
 
 - The editor targets desktop and tablet browsers.
-- When the selected originals exceed 50 MB in total, the selection bar warns
+- When a selected photo is larger than 40 megapixels, the selection bar warns
   that the browser may close because of limited memory, especially on a phone
-  or tablet. The warning does not block the collage.
+  or tablet. The export dialog warns when a format exceeds the canvas size that
+  mobile browsers can render (for example 30 × 45 cm at 300 PPI). Neither
+  warning blocks the collage.
 - TIFF files remain available in the gallery but cannot be used in collages.
 
 ## Cache warming

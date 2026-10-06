@@ -1,25 +1,42 @@
 import {test, expect} from '@playwright/test';
 import {editor, enterSelectionMode, openAlbum, selectedPrintAspect, selectPhotos, startCollage} from './helpers.mjs';
 
-test('selection warns on desktop when original files exceed 50 MB', async ({page}, testInfo) => {
+test('selection warns about very large photos using their decoded size', async ({page}, testInfo) => {
   test.skip(!testInfo.project.name.endsWith('-desktop'), 'Desktop memory-warning contract');
-  await page.route('**/api/list?**', async route => {
-    const response = await route.fetch();
-    const body = await response.json();
-    body.entries = body.entries.map(entry => entry.kind === 'image' ? {...entry, size: 30 * 1024 * 1024} : entry);
-    await route.fulfill({response, json: body});
+  await page.route('**/api/image-info?**', async route => {
+    const path = new URL(route.request().url()).searchParams.get('path');
+    if (path !== 'Album A/Photo 02.png') return route.continue();
+    await route.fulfill({json: {width: 8000, height: 6000, size: 4_000_000, modTime: '2026-10-06T10:00:00Z', mimeType: 'image/png'}});
   });
 
   await openAlbum(page);
   await enterSelectionMode(page);
   const selection = page.locator('#collageSelection');
+  const hint = selection.locator('.collage-selection-hint');
   await selectPhotos(page, 1);
+  await expect(hint).toHaveText('Выберите от 2 до 12 фотографий');
   await expect(selection).not.toHaveAttribute('data-memory-warning', 'true');
+
   await page.getByRole('button', {name: 'Выбрать Photo 02.png для коллажа'}).click();
-  await expect(page.locator('#collageSelectionCount')).toHaveText('2');
   await expect(selection).toHaveAttribute('data-memory-warning', 'true');
-  await expect(selection.locator('.collage-selection-hint')).toBeVisible();
-  await expect(selection.locator('.collage-selection-hint')).toHaveText('Выбрано 60.0 МБ. Браузер может закрыться из-за нехватки памяти, особенно на телефоне или планшете');
+  await expect(hint).toHaveText('Photo 02.png: 48 Мп. Очень крупные фото могут закрыть браузер из-за нехватки памяти, особенно на телефоне или планшете');
+
+  await page.getByRole('button', {name: 'Убрать Photo 02.png из коллажа'}).click();
+  await expect(selection).not.toHaveAttribute('data-memory-warning', 'true');
+});
+
+test('export dialog warns when the format exceeds the mobile canvas limit', async ({page}, testInfo) => {
+  test.skip(!testInfo.project.name.endsWith('-desktop'), 'Desktop export-dialog contract');
+  await startCollage(page, 2);
+  await editor(page).locator('[data-command="preflight"]').click();
+  await page.locator('[data-preflight-dialog]').getByRole('button', {name: 'Настройки скачивания'}).click();
+  const exportDialog = page.locator('[data-export-dialog]');
+  const warning = exportDialog.locator('[data-export-canvas-warning]');
+  await exportDialog.locator('[data-export-format]').selectOption('20x30');
+  await expect(warning).toBeHidden();
+  await exportDialog.locator('[data-export-format]').selectOption('30x45');
+  await expect(warning).toBeVisible();
+  await expect(warning).toContainText('может не собраться в браузере на телефоне или планшете');
 });
 
 test('editor adapts to the configured viewport without horizontal page overflow', async ({page}, testInfo) => {

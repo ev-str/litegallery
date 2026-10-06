@@ -1,3 +1,4 @@
+import {isLargePhoto, megapixels} from './collage/limits.js';
 import {isCollageSupportedPath} from './collage/support.js';
 
 const statusBox = document.querySelector('#status');
@@ -44,7 +45,7 @@ let mediaFilterKey = localStorage.getItem('gallery-media-filter') || 'all';
 let collageSelectionMode = false;
 const collageSelection = new Map();
 const COLLAGE_SELECTION_DEFAULT_HINT = 'Выберите от 2 до 12 фотографий';
-const COLLAGE_MEMORY_WARNING_BYTES = 50 * 1024 * 1024;
+const collagePhotoSizes = new Map();
 
 function resetCollageSelectionHint() {
   collageSelectionHint.textContent = COLLAGE_SELECTION_DEFAULT_HINT;
@@ -53,10 +54,30 @@ function resetCollageSelectionHint() {
 
 function updateCollageSelectionHint() {
   resetCollageSelectionHint();
-  const selectedBytes = [...collageSelection.values()].reduce((total, item) => total + Number(item.size || 0), 0);
-  if (!collageSelectionMode || selectedBytes <= COLLAGE_MEMORY_WARNING_BYTES) return;
+  if (!collageSelectionMode) return;
+  let largest = null;
+  for (const item of collageSelection.values()) {
+    const size = collagePhotoSizes.get(item.path);
+    if (!size || !isLargePhoto(size.width, size.height)) continue;
+    const value = megapixels(size.width, size.height);
+    if (!largest || value > largest.megapixels) largest = {name: item.name, megapixels: value};
+  }
+  if (!largest) return;
   collageSelectionBar.dataset.memoryWarning = 'true';
-  collageSelectionHint.textContent = `Выбрано ${formatBytes(selectedBytes)}. Браузер может закрыться из-за нехватки памяти, особенно на телефоне или планшете`;
+  collageSelectionHint.textContent = `${largest.name}: ${Math.round(largest.megapixels)} Мп. Очень крупные фото могут закрыть браузер из-за нехватки памяти, особенно на телефоне или планшете`;
+}
+
+// Dimensions come from /api/image-info, so the warning reflects decoded size rather than file size.
+function requestCollagePhotoSize(item) {
+  if (collagePhotoSizes.has(item.path)) return;
+  collagePhotoSizes.set(item.path, null);
+  fetch(apiURL('/api/image-info', item.path, `${item.modTime}-${item.size}`))
+    .then(response => (response.ok ? response.json() : null))
+    .then(info => {
+      if (info?.width > 0 && info?.height > 0) collagePhotoSizes.set(item.path, {width: info.width, height: info.height});
+      if (collageSelection.has(item.path)) updateCollageSelectionHint();
+    })
+    .catch(() => collagePhotoSizes.delete(item.path));
 }
 
 if (!['date', 'name'].includes(mediaSortKey)) mediaSortKey = 'date';
@@ -256,7 +277,10 @@ function updateCollageSelection() {
 function toggleCollagePhoto(item, card) {
   resetCollageSelectionHint();
   if (collageSelection.has(item.path)) collageSelection.delete(item.path);
-  else if (collageSelection.size < 12) collageSelection.set(item.path, item);
+  else if (collageSelection.size < 12) {
+    collageSelection.set(item.path, item);
+    requestCollagePhotoSize(item);
+  }
   card.classList.toggle('is-collage-selected', collageSelection.has(item.path));
   card.setAttribute('aria-pressed', String(collageSelection.has(item.path)));
   card.setAttribute('aria-label', `${collageSelection.has(item.path) ? 'Убрать' : 'Выбрать'} ${item.name} ${collageSelection.has(item.path) ? 'из' : 'для'} коллажа`);

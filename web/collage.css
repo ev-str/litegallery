@@ -322,6 +322,7 @@ footer.collage-quality-pill { min-height: 30px; padding: 5px 11px; box-sizing: b
 .collage-save-card { width: min(540px, calc(100vw - 28px)); }
 .collage-export-summary { padding: 15px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; background: #f3ece4; border-radius: 14px; }
 .collage-export-summary span, .collage-export-summary strong { min-width: 0; display: block; }
+.collage-export-warning { margin: 0; padding: 10px 14px; color: #8b352d; font-weight: 650; border-left: 4px solid #d49c43; background: #fbf3ea; border-radius: 10px; }
 .collage-export-weakest, .collage-export-bleed-state { grid-column: span 2; white-space: nowrap; }
 .collage-exit-card { width: min(580px, calc(100vw - 28px)); }
 .collage-exit-card label { display: grid; gap: 7px; }

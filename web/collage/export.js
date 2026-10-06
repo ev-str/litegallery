@@ -4,6 +4,7 @@ import {buildRenderPlan} from './render-plan.js';
 import {fetchImageBitmap, renderCanvas} from './canvas-renderer.js';
 import {getPrintDimensions} from './formats.js';
 import {withJpegDensity} from './jpeg-metadata.js';
+import {estimateExportBytes, exportMemoryBudget} from './limits.js';
 
 /**
  * @param {import('./render-plan.js').RenderProject} project
@@ -73,8 +74,7 @@ function exportWithWorker(project, print, quality, options) {
 
 /** @param {{width: number, height: number}} plan */
 export function estimateExportMemory(plan) {
-  // One RGBA backing store plus approximately one encoding/output buffer.
-  return Math.ceil(plan.width) * Math.ceil(plan.height) * 8;
+  return estimateExportBytes(plan.width, plan.height);
 }
 
 /**
@@ -95,7 +95,7 @@ export function prepareExportPlan(project, print, options = {}) {
   let plan = canonical
     ? buildRenderPlan(/** @type {import('./types.js').ProjectState} */ (exportProject), {ignoredIssueIds: options.ignoredIssueIds})
     : buildRenderPlan(/** @type {import('./render-plan.js').RenderProject} */ (exportProject), exportPrint, {ignoredIssueIds: options.ignoredIssueIds});
-  const limit = options.maxMemoryBytes ?? defaultMemoryBudget();
+  const limit = options.maxMemoryBytes ?? exportMemoryBudget();
   const requestedPpi = exportPrint.ppi;
   if (estimateExportMemory(plan) > limit && requestedPpi > 300) {
     if (canonical) {
@@ -125,10 +125,4 @@ function canonicalPhysicalPrint(project) {
     ppi: project.print.ppi,
     bleedMm: project.print.bleedMm,
   };
-}
-
-function defaultMemoryBudget() {
-  const deviceMemory = typeof navigator === 'undefined' ? 0 : Number(/** @type {Navigator & {deviceMemory?: number}} */ (navigator).deviceMemory);
-  const deviceGiB = deviceMemory > 0 ? deviceMemory : 4;
-  return Math.max(128, Math.min(512, deviceGiB * 128)) * 1024 * 1024;
 }
