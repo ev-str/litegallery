@@ -257,9 +257,10 @@ collage zoom/pan, fitted source-photo previews, and source-photo zoom/pan.
 Browser tests must verify visible decoded images rather than treating a
 successful ZIP parse as sufficient. Unit and integration coverage locks
 preview/export divider colour parity and EXIF display dimensions for
-orientations 1–8, including mirrored camera images. Pixel-level parity between
-the preview and exported JPEG for oriented sources remains an explicit E2E
-release check.
+orientations 1–8, including mirrored camera images. Browser tests
+(`tests/e2e/orientation-tiff.spec.mjs`) check in every desktop engine that the
+decoder used for preview and export orients EXIF 1, 5, and 6 pixels exactly as
+the server thumbnails do.
 
 ## Current boundaries and follow-ups
 
@@ -280,11 +281,6 @@ release check.
 - TIFF support is checked separately in `web/app.js` and
   `web/collage/sources.js`. Consolidating the duplicated guard is backlog work;
   until then both checks must stay aligned.
-- Before release, run a real-browser export regression with an asymmetric JPEG
-  carrying EXIF Orientation 6 and one mirrored orientation, then compare known
-  preview pixels with the exported JPEG.
-- Replace source-text TIFF assertions in `collage-ui-contract.test.mjs` with a
-  behavioural E2E check that clicking a TIFF card does not change selection.
 - Canvas limits and large-source/ZIP memory optimisations remain future work.
   As a temporary `v0.2.0` safeguard, every screen shows an informational
   warning when selected originals exceed 50 MB in total; it does not block the

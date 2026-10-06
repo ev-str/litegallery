@@ -77,16 +77,6 @@ test('selection bar opens JSON or ZIP projects through the shared validated inpu
   assert.match(editor, /assertProject\(project\);/);
 });
 
-test('collage selection keeps accessible labels and rejects TIFF explicitly', async () => {
-  const app = await readFile(appUrl, 'utf8');
-  assert.match(app, /COLLAGE_UNSUPPORTED_EXTENSIONS = new Set\(\['\.tif', '\.tiff'\]\)/);
-  assert.match(app, /TIFF пока недоступен для коллажа/);
-  assert.match(app, /if \(supported\) \{[\s\S]*aria-pressed[\s\S]*aria-label[\s\S]*\} else \{/);
-  assert.doesNotMatch(app, /\}\n\s*card\.setAttribute\('aria-label', `Открыть \$\{item\.name\}`\);\n\s*if \(item\.kind === 'image'\)/);
-  assert.match(app, /function resetCollageSelectionHint\(\)[\s\S]*COLLAGE_SELECTION_DEFAULT_HINT/);
-  assert.match(app, /function toggleCollagePhoto\([^)]*\) \{\s*resetCollageSelectionHint\(\);/);
-});
-
 test('runtime version is loaded from the server and written into saved project documents', async () => {
   const source = await readFile(editorUrl, 'utf8');
   assert.match(source, /fetch\('\/api\/config'/);
