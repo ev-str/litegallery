@@ -1,6 +1,9 @@
 // @ts-check
 
 import {createPhotoSource} from './model.js';
+import {isCollageSupportedPath} from './support.js';
+
+export {isCollageSupportedPath};
 
 /** @typedef {import('./types.js').PhotoSource} PhotoSource */
 /** @typedef {{path: string, name: string, kind: string, size?: number, modTime?: string}} SourceEntry */
@@ -9,11 +12,6 @@ import {createPhotoSource} from './model.js';
 /** @param {string} endpoint @param {string} path */
 export function collageApiUrl(endpoint, path) {
   return `${endpoint}?path=${encodeURIComponent(path)}`;
-}
-
-/** @param {string} path */
-export function isCollageSupportedPath(path) {
-  return !/\.tiff?$/i.test(String(path));
 }
 
 /** @param {string} path */

@@ -279,9 +279,8 @@ the server thumbnails do.
   `v0.2.0`: no such projects exist, and TIFF remains unsupported in collages.
 - The 12-photo selection ceiling is intentionally silent: clicking a 13th
   photo leaves the current selection unchanged without replacing the hint.
-- TIFF support is checked separately in `web/app.js` and
-  `web/collage/sources.js`. Consolidating the duplicated guard is backlog work;
-  until then both checks must stay aligned.
+- Collage format support is defined once in `web/collage/support.js` and used
+  by both the gallery selection and the editor.
 - Canvas limits and large-source/ZIP memory optimisations remain future work.
   As a temporary `v0.2.0` safeguard, every screen shows an informational
   warning when selected originals exceed 50 MB in total; it does not block the

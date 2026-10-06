@@ -1,3 +1,5 @@
+import {isCollageSupportedPath} from './collage/support.js';
+
 const statusBox = document.querySelector('#status');
 const crumbs = document.querySelector('#breadcrumbs');
 const foldersSection = document.querySelector('#foldersSection');
@@ -41,7 +43,6 @@ let mediaSortKey = localStorage.getItem('gallery-media-sort') || 'date';
 let mediaFilterKey = localStorage.getItem('gallery-media-filter') || 'all';
 let collageSelectionMode = false;
 const collageSelection = new Map();
-const COLLAGE_UNSUPPORTED_EXTENSIONS = new Set(['.tif', '.tiff']);
 const COLLAGE_SELECTION_DEFAULT_HINT = 'Выберите от 2 до 12 фотографий';
 const COLLAGE_MEMORY_WARNING_BYTES = 50 * 1024 * 1024;
 
@@ -64,9 +65,7 @@ if (!['all', 'image', 'video'].includes(mediaFilterKey)) mediaFilterKey = 'all';
 const nameCollator = new Intl.Collator('ru', {numeric: true, sensitivity: 'base'});
 
 function isCollagePhotoSupported(item) {
-  const name = String(item?.name || item?.path || '').toLowerCase();
-  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
-  return item?.kind === 'image' && !COLLAGE_UNSUPPORTED_EXTENSIONS.has(extension);
+  return item?.kind === 'image' && isCollageSupportedPath(item.path || item.name || '');
 }
 
 function sortByName(items, descending) {
