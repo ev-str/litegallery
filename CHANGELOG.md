@@ -4,16 +4,14 @@
 
 - Refresh the visual hierarchy with an album title, media statistics, and a
   unified filter and sorting toolbar.
-- Replace text symbols with consistent embedded SVG icons.
 - Refine folder covers and media cards with improved typography, depth, loading
   placeholders, and restrained motion.
-- Introduce a dark cinematic viewer with auto-hiding controls.
 - Present EXIF metadata as a side panel on larger screens and a bottom sheet on
   phones.
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
 
-## Unreleased
+## 0.2.2 — 2026-10-06
 
 ### Added
 
