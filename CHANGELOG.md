@@ -13,7 +13,7 @@
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
 
-## Unreleased
+## 0.2.1 — 2026-10-06
 
 ### Changed
 
@@ -39,6 +39,10 @@
   collage; the source-text assertions it replaces were removed.
 - Browser tests compare WebKit download names after Unicode normalisation and
   use exact role names on narrow viewports.
+- Unit tests check that every PPI offered by the chooser fits the export memory
+  budget; source-text contract tests duplicated by browser tests were removed.
+- Release checklists build with `git describe` versions and include the Linux
+  targets.
 
 ## 0.2.0 — 2026-10-06
 
