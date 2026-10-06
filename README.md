@@ -328,6 +328,23 @@ changed spec immediately after editing it. Tag a test as essential with
 keep the essential suite short. Failure screenshots and traces are written to
 the temporary runtime directory printed in the report.
 
+### Releases
+
+Release assets are built from a clean checkout of a release tag:
+
+```sh
+git switch main && git pull --ff-only
+git tag -a v0.2.2 -m "LiteGallery v0.2.2"
+git push origin v0.2.2
+make release
+gh release create v0.2.2 dist/* --title "LiteGallery v0.2.2" --notes-file <notes.md>
+```
+
+`make release` refuses to build when `git describe` is not an exact `vX.Y.Z`
+tag or the tree has uncommitted changes. It writes the FreeBSD and Linux
+binaries plus a `SHA256SUMS` file with bare file names to `dist/`, so
+downloads can be verified with `shasum -a 256 -c SHA256SUMS`.
+
 ### Documentation screenshots
 
 The screenshots in `docs/screenshots/` are generated from demo fixtures. After a

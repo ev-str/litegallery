@@ -44,6 +44,9 @@ make build-freebsd
 make build-linux
 ```
 
+Publish releases from a clean tagged checkout with `make release`; it fails for
+untagged or dirty trees. Upload `dist/*` (binaries and `SHA256SUMS`).
+
 Browser-test rules:
 
 - Run a changed spec right after editing it, with `--max-failures=1`.

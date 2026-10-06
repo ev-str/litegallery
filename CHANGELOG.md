@@ -13,6 +13,24 @@
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
 
+## Unreleased
+
+### Added
+
+- Embedded SVG icon sprite replaces text symbols in the gallery, viewer, and
+  collage editor.
+- Dark full-screen viewer: borderless media, glass controls, and a caption
+  overlay. Controls fade after 2.5 seconds without input and return on any
+  pointer, touch, or key event; they stay visible while EXIF is open.
+- `make release` builds release binaries and a `SHA256SUMS` file with bare
+  file names into `dist/`, and refuses untagged or dirty checkouts.
+
+### Development
+
+- Browser tests for the viewer: navigation, slideshow, idle hiding, and EXIF.
+- Unit test that every referenced icon exists in the sprite.
+- Documentation screenshots include the viewer.
+
 ## 0.2.1 — 2026-10-06
 
 ### Changed
