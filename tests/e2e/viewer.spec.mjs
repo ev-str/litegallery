@@ -6,6 +6,18 @@ test.beforeEach(async ({page}, testInfo) => {
   await page.clock.install();
 });
 
+// Reach a control with real Tab presses. Safari's Tab skips buttons by default,
+// so WebKit falls back to focus after a key press, which it treats as keyboard
+// focus; Chromium and Firefox take the Tab path.
+async function focusWithKeyboard(page, locator) {
+  for (let step = 0; step < 12; step += 1) {
+    if (await locator.evaluate(element => element === document.activeElement)) return;
+    await page.keyboard.press('Tab');
+  }
+  await page.keyboard.press('ArrowDown');
+  await locator.focus();
+}
+
 async function openFirstPhoto(page) {
   await openAlbum(page);
   await page.locator('#mediaGrid .media-card.image').first().click();
@@ -58,6 +70,28 @@ test('viewer controls hide after inactivity and return on input', async ({page})
   await expect(viewer).toHaveAttribute('data-idle', 'true');
   await page.keyboard.press('ArrowRight');
   await expect(viewer).toHaveAttribute('data-idle', 'false');
+});
+
+test('the keyboard-focused control stays visible while other controls hide', async ({page}) => {
+  const viewer = await openFirstPhoto(page);
+  const next = viewer.getByRole('button', {name: 'Следующее'});
+  const close = viewer.getByRole('button', {name: 'Закрыть', exact: true});
+  const slideshow = viewer.locator('.slideshow');
+
+  await focusWithKeyboard(page, next);
+  await expect(next).toBeFocused();
+  await expect(next).toHaveCSS('outline-style', 'solid');
+  await page.clock.runFor(3_000);
+  await expect(viewer).toHaveAttribute('data-idle', 'true');
+  await expect(next).toHaveCSS('opacity', '1');
+  await expect(close).toHaveCSS('opacity', '0');
+
+  await focusWithKeyboard(page, slideshow);
+  await expect(slideshow).toBeFocused();
+  await page.clock.runFor(3_000);
+  await expect(viewer).toHaveAttribute('data-idle', 'true');
+  await expect(viewer.locator('footer')).toHaveCSS('opacity', '1');
+  await expect(next).toHaveCSS('opacity', '0');
 });
 
 test('viewer controls stay visible while EXIF details are open', async ({page}) => {

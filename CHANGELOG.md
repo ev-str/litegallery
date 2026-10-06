@@ -19,7 +19,9 @@
   collage editor.
 - Dark full-screen viewer: borderless media, glass controls, and a caption
   overlay. Controls fade after 2.5 seconds without input and return on any
-  pointer, touch, or key event; they stay visible while EXIF is open.
+  pointer, touch, or key event; they stay visible while EXIF is open, and the
+  control that has keyboard focus never hides. Opening the viewer focuses the
+  viewer itself, so no button starts with a focus ring.
 - `make release` builds release binaries and a `SHA256SUMS` file with bare
   file names into `dist/`, and refuses untagged or dirty checkouts.
 

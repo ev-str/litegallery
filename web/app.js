@@ -413,7 +413,11 @@ function renderBreadcrumbs() {
 function openMedia(path) {
   currentIndex = media.findIndex(item => item.path === path);
   showCurrent();
-  if (!viewer.open) viewer.showModal();
+  if (!viewer.open) {
+    viewer.showModal();
+    // Focus the dialog itself so no control starts with a focus ring; Tab reaches the buttons.
+    viewer.focus({preventScroll: true});
+  }
   wakeViewerControls();
 }
 

@@ -410,6 +410,7 @@ main {
 }
 
 #viewer[open] { display: block; }
+#viewer:focus { outline: none; }
 #viewer::backdrop { background: rgba(0, 0, 0, .86); }
 #viewer[data-idle="true"] { cursor: none; }
 
@@ -454,6 +455,13 @@ main {
 #viewer[data-idle="true"] footer {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Keyboard focus must stay visible: the focused control ignores idle hiding. */
+#viewer[data-idle="true"] .viewer-button:focus-visible,
+#viewer[data-idle="true"] footer:has(:focus-visible) {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .viewer-button {
