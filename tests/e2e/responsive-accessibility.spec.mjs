@@ -39,6 +39,28 @@ test('export dialog warns when the format exceeds the mobile canvas limit', asyn
   await expect(warning).toContainText('может не собраться в браузере на телефоне или планшете');
 });
 
+test('offered export PPI follows the weakest photo shown in the summary', async ({page}, testInfo) => {
+  test.skip(!testInfo.project.name.endsWith('-desktop'), 'Desktop export-dialog contract');
+  // Twelve small cells give the 640×900 fixtures more than 300 PPI on small formats.
+  await startCollage(page, 12);
+  await editor(page).locator('[data-command="preflight"]').click();
+  await page.locator('[data-preflight-dialog]').getByRole('button', {name: 'Настройки скачивания'}).click();
+  const exportDialog = page.locator('[data-export-dialog]');
+  let highestOffered = 0;
+  for (const format of ['10x15', '13x18', '20x30']) {
+    await exportDialog.locator('[data-export-format]').selectOption(format);
+    const weakestText = await exportDialog.locator('.collage-export-weakest').textContent();
+    const weakest = Number(weakestText?.match(/(\d+) PPI/)?.[1]);
+    const offered = await exportDialog.locator('[data-export-ppi] option').evaluateAll(options => options.map(option => Number(option.value)));
+    expect(weakest, format).toBeGreaterThan(0);
+    expect(offered[0], format).toBe(300);
+    expect(Math.max(...offered), format).toBeLessThanOrEqual(Math.max(300, weakest));
+    expect(Math.max(...offered) % 25, format).toBe(0);
+    highestOffered = Math.max(highestOffered, ...offered);
+  }
+  expect(highestOffered, 'at least one format must offer more than 300 PPI').toBeGreaterThan(300);
+});
+
 test('editor adapts to the configured viewport without horizontal page overflow', async ({page}, testInfo) => {
   await startCollage(page, 2);
   const viewport = testInfo.project.use.viewport;

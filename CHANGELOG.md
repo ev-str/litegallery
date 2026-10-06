@@ -21,6 +21,9 @@
 
 ### Development
 
+- The export PPI recommendation moved to `recommendedExportPpi` in
+  `web/collage/limits.js` and is derived from the preflight weakest-frame PPI,
+  so the offered PPI never exceeds the "weakest frame" value shown next to it.
 - `web/app.js` is split into the gallery (`app.js`), the viewer (`viewer.js`),
   collage selection (`collage-selection.js`), video posters
   (`video-posters.js`), and shared formatting helpers (`format.js`).

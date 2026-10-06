@@ -284,7 +284,8 @@ the server thumbnails do.
   by both the gallery selection and the editor.
 - Memory limits live in `web/collage/limits.js`. The PPI chooser and the export
   share one budget and per-pixel estimate, so the chooser never offers a PPI
-  that the export would reject. The selection bar warns about photos above
+  that the export would reject. `recommendedExportPpi` derives the offered PPI
+  from the preflight "weakest frame" value, so the two never disagree. The selection bar warns about photos above
   `LARGE_PHOTO_MEGAPIXELS` using `/api/image-info`, and the export dialog warns
   when a format exceeds `MAX_SAFE_CANVAS_PIXELS`. Warnings never block the
   workflow; the thresholds are tuned by testing on real devices.

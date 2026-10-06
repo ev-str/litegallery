@@ -8,7 +8,7 @@ import {EDGE_PRESETS} from './frames.js';
 import {jpegFilename, projectFilename} from './filenames.js';
 import {getPrintDimensions, getPrintFormat, PRINT_FORMATS} from './formats.js';
 import {iconMarkup} from '../icons.js';
-import {exceedsSafeCanvas, maxPpiForMemory} from './limits.js';
+import {exceedsSafeCanvas, MIN_EXPORT_PPI, recommendedExportPpi} from './limits.js';
 import {centeredCrop, clampCrop, cropDistortionPercent, effectiveCropPpi, normalizePhotoRotation, rectToPixels, refitCropAroundCenter, rotatedSourceDimensions} from './geometry.js';
 import {assertProject, createPlacementId, createProject, getCellAspect, validateProject} from './model.js';
 import {BACKGROUND_PALETTE, createFramePalette} from './palette.js';
@@ -1436,7 +1436,7 @@ function updateExportSummary() {
   let weakest = '—';
   if (store) {
     const state = store.getState();
-    const preflight = runPreflight(toRenderProject(state, false, 0), {widthMm: dimensions.trimWidthMm, heightMm: dimensions.trimHeightMm, ppi: settings.ppi, bleedMm: settings.bleedMm}, Object.fromEntries(Object.values(state.sources).map(source => [source.id, {width: source.width, height: source.height, available: true}])));
+    const preflight = runPreflight(toRenderProject(state, false, 0), {widthMm: dimensions.trimWidthMm, heightMm: dimensions.trimHeightMm, ppi: settings.ppi, bleedMm: settings.bleedMm}, availableSources(state));
     weakest = preflight.weakestPpi ? `${Math.round(preflight.weakestPpi)} PPI` : '—';
   }
   const summary = exportDialog.querySelector('[data-export-summary]');
@@ -1477,25 +1477,14 @@ function updatePpiOptions(preferred) {
 
 /** @param {ProjectState} state @param {string} formatId @param {'portrait'|'landscape'} orientation @param {number} bleedMm */
 function highestSafePpi(state, formatId, orientation, bleedMm) {
-  const format = getPrintFormat(formatId);
-  const widthMm = orientation === 'portrait' ? format.widthMm : format.heightMm;
-  const heightMm = orientation === 'portrait' ? format.heightMm : format.widthMm;
-  const template = getTemplate(state.layout.templateId);
-  let sourceLimit = Infinity;
-  state.layout.order.forEach((placementId, index) => {
-    if (!placementId) return;
-    const placement = state.placements[placementId];
-    const source = placement && state.sources[placement.sourceId];
-    const cell = template.cells[index];
-    if (!placement || !source || !cell) return;
-    const dimensions = rotatedSourceDimensions(source.width, source.height, placement.rotation);
-    const horizontal = dimensions.width * placement.crop.width / (widthMm * cell.rect.width / 25.4);
-    const vertical = dimensions.height * placement.crop.height / (heightMm * cell.rect.height / 25.4);
-    sourceLimit = Math.min(sourceLimit, horizontal, vertical);
-  });
-  const memoryLimit = maxPpiForMemory(formatId, orientation, bleedMm);
-  const raw = Math.min(Number.isFinite(sourceLimit) ? sourceLimit : 300, memoryLimit, 600);
-  return Math.max(300, Math.floor(raw / 25) * 25);
+  const dimensions = getPrintDimensions(formatId, orientation, MIN_EXPORT_PPI, bleedMm);
+  const {weakestPpi} = runPreflight(toRenderProject(state, false, 0), {widthMm: dimensions.trimWidthMm, heightMm: dimensions.trimHeightMm, ppi: MIN_EXPORT_PPI, bleedMm}, availableSources(state));
+  return recommendedExportPpi(weakestPpi, formatId, orientation, bleedMm);
+}
+
+/** @param {ProjectState} state */
+function availableSources(state) {
+  return Object.fromEntries(Object.values(state.sources).map(source => [source.id, {width: source.width, height: source.height, available: true}]));
 }
 
 /** @param {string} kind */
