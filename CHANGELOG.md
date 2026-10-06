@@ -11,6 +11,20 @@
 - Improve mobile controls and TV-focused keyboard navigation without adding a
   frontend build step or external runtime dependencies.
 
+## Unreleased
+
+### Fixed
+
+- The thumbnail server no longer keeps a lock entry for every thumbnail ever
+  requested, so memory stays flat on long-running servers. Serving an already
+  cached thumbnail no longer waits behind other requests for the same file.
+
+### Development
+
+- `web/app.js` is split into the gallery (`app.js`), the viewer (`viewer.js`),
+  collage selection (`collage-selection.js`), video posters
+  (`video-posters.js`), and shared formatting helpers (`format.js`).
+
 ## 0.2.2 — 2026-10-06
 
 ### Added
