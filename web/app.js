@@ -414,6 +414,28 @@ function openMedia(path) {
   currentIndex = media.findIndex(item => item.path === path);
   showCurrent();
   if (!viewer.open) viewer.showModal();
+  wakeViewerControls();
+}
+
+// Viewer controls fade out after a pause; any pointer, touch, or key input brings
+// them back. They stay visible while EXIF is open or the pointer rests on them.
+const VIEWER_IDLE_MS = 2500;
+let viewerIdleTimer = 0;
+
+function wakeViewerControls() {
+  if (!viewer.open) return;
+  viewer.dataset.idle = 'false';
+  clearTimeout(viewerIdleTimer);
+  viewerIdleTimer = setTimeout(hideViewerControls, VIEWER_IDLE_MS);
+}
+
+function hideViewerControls() {
+  if (!viewer.open) return;
+  if (!exifPanel.hidden || viewer.querySelector('.viewer-button:hover, footer:hover')) {
+    viewerIdleTimer = setTimeout(hideViewerControls, VIEWER_IDLE_MS);
+    return;
+  }
+  viewer.dataset.idle = 'true';
 }
 
 function showCurrent() {
@@ -594,11 +616,19 @@ fullscreenButton.hidden = !(
 );
 document.addEventListener('fullscreenchange', updateFullscreenButton);
 document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
-viewer.addEventListener('close', () => { stopSlideshow(); closeEXIF(); stage.replaceChildren(); });
+viewer.addEventListener('close', () => {
+  stopSlideshow();
+  closeEXIF();
+  stage.replaceChildren();
+  clearTimeout(viewerIdleTimer);
+  delete viewer.dataset.idle;
+});
+for (const type of ['pointermove', 'pointerdown', 'focusin', 'wheel']) viewer.addEventListener(type, wakeViewerControls, {passive: true});
 document.querySelector('#refresh').onclick = () => load(currentPath, false);
 addEventListener('popstate', event => load(event.state?.path || new URLSearchParams(location.search).get('path') || '', false));
 addEventListener('keydown', event => {
   if (viewer.open) {
+    wakeViewerControls();
     if (event.key === 'ArrowLeft') move(-1);
     if (event.key === 'ArrowRight') move(1);
     if (event.key === ' ') { event.preventDefault(); toggleSlideshow(); }
