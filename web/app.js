@@ -10,6 +10,14 @@ const folderSort = document.querySelector('#folderSort');
 const mediaSort = document.querySelector('#mediaSort');
 const mediaDirection = document.querySelector('#mediaDirection');
 const mediaFilter = document.querySelector('#mediaFilter');
+const collageModeButton = document.querySelector('#collageMode');
+const collageSelectionBar = document.querySelector('#collageSelection');
+const collageSelectionCount = document.querySelector('#collageSelectionCount');
+const collageSelectionStart = document.querySelector('#collageSelectionStart');
+const collageSelectionCancel = document.querySelector('#collageSelectionCancel');
+const collageProjectOpen = document.querySelector('#collageProjectOpen');
+const collageProjectInput = document.querySelector('#collageProjectInput');
+const collageSelectionHint = collageSelectionBar.querySelector('.collage-selection-hint');
 const viewer = document.querySelector('#viewer');
 const stage = viewer.querySelector('.stage');
 const caption = viewer.querySelector('.caption');
@@ -31,11 +39,35 @@ let folderDescending = localStorage.getItem('gallery-folder-order') !== 'asc';
 let mediaDescending = localStorage.getItem('gallery-media-order') !== 'asc';
 let mediaSortKey = localStorage.getItem('gallery-media-sort') || 'date';
 let mediaFilterKey = localStorage.getItem('gallery-media-filter') || 'all';
+let collageSelectionMode = false;
+const collageSelection = new Map();
+const COLLAGE_UNSUPPORTED_EXTENSIONS = new Set(['.tif', '.tiff']);
+const COLLAGE_SELECTION_DEFAULT_HINT = 'Выберите от 2 до 12 фотографий';
+const COLLAGE_MEMORY_WARNING_BYTES = 50 * 1024 * 1024;
+
+function resetCollageSelectionHint() {
+  collageSelectionHint.textContent = COLLAGE_SELECTION_DEFAULT_HINT;
+  delete collageSelectionBar.dataset.memoryWarning;
+}
+
+function updateCollageSelectionHint() {
+  resetCollageSelectionHint();
+  const selectedBytes = [...collageSelection.values()].reduce((total, item) => total + Number(item.size || 0), 0);
+  if (!collageSelectionMode || selectedBytes <= COLLAGE_MEMORY_WARNING_BYTES) return;
+  collageSelectionBar.dataset.memoryWarning = 'true';
+  collageSelectionHint.textContent = `Выбрано ${formatBytes(selectedBytes)}. Браузер может закрыться из-за нехватки памяти, особенно на телефоне или планшете`;
+}
 
 if (!['date', 'name'].includes(mediaSortKey)) mediaSortKey = 'date';
 if (!['all', 'image', 'video'].includes(mediaFilterKey)) mediaFilterKey = 'all';
 
 const nameCollator = new Intl.Collator('ru', {numeric: true, sensitivity: 'base'});
+
+function isCollagePhotoSupported(item) {
+  const name = String(item?.name || item?.path || '').toLowerCase();
+  const extension = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+  return item?.kind === 'image' && !COLLAGE_UNSUPPORTED_EXTENSIONS.has(extension);
+}
 
 function sortByName(items, descending) {
   const sorted = [...items].sort((left, right) => nameCollator.compare(left.name, right.name));
@@ -94,7 +126,7 @@ async function load(path, push = true) {
     if (push) history.pushState({path: currentPath}, '', currentPath ? `?path=${encodeURIComponent(currentPath)}` : '/');
     renderBreadcrumbs();
     render(data.entries);
-    statusBox.textContent = data.entries.length ? `${data.entries.length} элементов` : 'Папка пуста';
+    statusBox.textContent = data.entries.length ? formatCount(data.entries.length, ['элемент', 'элемента', 'элементов']) : 'Папка пуста';
   } catch (error) {
     statusBox.textContent = error.message;
   }
@@ -156,7 +188,21 @@ function renderMedia(items) {
     card.type = 'button';
     card.className = `media-card gallery-item ${item.kind}`;
     card.dataset.path = item.path;
-    card.setAttribute('aria-label', `Открыть ${item.name}`);
+    card.classList.toggle('is-collage-selected', collageSelection.has(item.path));
+    if (collageSelectionMode && item.kind === 'image') {
+      const supported = isCollagePhotoSupported(item);
+      card.classList.toggle('is-collage-unsupported', !supported);
+      card.setAttribute('aria-disabled', String(!supported));
+      if (supported) {
+        card.setAttribute('aria-pressed', String(collageSelection.has(item.path)));
+        card.setAttribute('aria-label', `${collageSelection.has(item.path) ? 'Убрать' : 'Выбрать'} ${item.name} ${collageSelection.has(item.path) ? 'из' : 'для'} коллажа`);
+      } else {
+        card.setAttribute('aria-label', `${item.name}: TIFF пока недоступен для коллажа`);
+        card.title = 'TIFF пока недоступен для коллажа';
+      }
+    } else {
+      card.setAttribute('aria-label', `Открыть ${item.name}`);
+    }
     if (item.kind === 'image') {
       const image = document.createElement('img');
       image.loading = 'lazy';
@@ -184,12 +230,70 @@ function renderMedia(items) {
     overlay.querySelector('.media-name').textContent = item.name;
     overlay.querySelector('.media-meta').textContent = `${item.kind === 'video' ? 'Видео' : 'Фото'} · ${formatBytes(item.size)}`;
     card.append(overlay);
-    card.addEventListener('click', () => openMedia(item.path));
+    card.addEventListener('click', () => {
+      if (collageSelectionMode && item.kind === 'image') {
+        if (!isCollagePhotoSupported(item)) {
+          collageSelectionHint.textContent = 'TIFF пока недоступен для коллажа';
+          return;
+        }
+        toggleCollagePhoto(item, card);
+        return;
+      }
+      if (!collageSelectionMode) openMedia(item.path);
+    });
     fragment.append(card);
   }
   mediaGrid.append(fragment);
 }
 
+function updateCollageSelection() {
+  collageSelectionCount.textContent = String(collageSelection.size);
+  collageSelectionStart.disabled = collageSelection.size < 2;
+  collageSelectionBar.hidden = !collageSelectionMode;
+  collageModeButton.setAttribute('aria-pressed', String(collageSelectionMode));
+  updateCollageSelectionHint();
+}
+
+function toggleCollagePhoto(item, card) {
+  resetCollageSelectionHint();
+  if (collageSelection.has(item.path)) collageSelection.delete(item.path);
+  else if (collageSelection.size < 12) collageSelection.set(item.path, item);
+  card.classList.toggle('is-collage-selected', collageSelection.has(item.path));
+  card.setAttribute('aria-pressed', String(collageSelection.has(item.path)));
+  card.setAttribute('aria-label', `${collageSelection.has(item.path) ? 'Убрать' : 'Выбрать'} ${item.name} ${collageSelection.has(item.path) ? 'из' : 'для'} коллажа`);
+  updateCollageSelection();
+}
+
+function leaveCollageSelection() {
+  collageSelectionMode = false;
+  collageSelection.clear();
+  resetCollageSelectionHint();
+  updateCollageSelection();
+  applyMediaView();
+}
+
+collageModeButton.addEventListener('click', () => {
+  collageSelectionMode = !collageSelectionMode;
+  if (!collageSelectionMode) collageSelection.clear();
+  resetCollageSelectionHint();
+  updateCollageSelection();
+  applyMediaView();
+});
+collageSelectionCancel.addEventListener('click', leaveCollageSelection);
+collageProjectOpen.addEventListener('click', () => {
+  resetCollageSelectionHint();
+  collageProjectInput.value = '';
+  collageProjectInput.click();
+});
+collageSelectionStart.addEventListener('click', () => {
+  if (collageSelection.size < 2) return;
+  window.dispatchEvent(new CustomEvent('litegallery:open-collage', {detail: {photos: [...collageSelection.values()], path: currentPath}}));
+  leaveCollageSelection();
+});
+window.addEventListener('litegallery:project-loaded', leaveCollageSelection);
+window.addEventListener('litegallery:project-load-error', event => {
+  collageSelectionHint.textContent = event.detail?.message || 'Не удалось открыть проект';
+});
 function queueVideoPreview(item, poster) {
   if (pendingVideoPreviews.has(item.path) || failedVideoPreviews.has(item.path)) return;
   pendingVideoPreviews.add(item.path);

@@ -1,0 +1,16 @@
+{
+  "name": "litegallery-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:js": "node --test tests/js/*.test.mjs",
+    "test:e2e:essential": "playwright test --grep @essential --project=chromium-desktop --max-failures=1",
+    "test:e2e:full": "playwright test --max-failures=3",
+    "screenshots:docs": "LITEGALLERY_DOC_SCREENSHOTS=1 playwright test tests/e2e/docs-screenshots.spec.mjs --project=chromium-desktop",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "typescript": "^5.9.3"
+  }
+}

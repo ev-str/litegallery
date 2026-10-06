@@ -21,8 +21,11 @@ import (
 //go:embed web/*
 var webFiles embed.FS
 
+var version = "dev"
+
 func main() {
 	var cfg internal.Config
+	cfg.Version = version
 	var warmCache bool
 	var pruneCache bool
 	var warmWorkers int

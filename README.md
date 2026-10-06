@@ -4,6 +4,7 @@
   <p>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white">
     <img alt="FreeBSD" src="https://img.shields.io/badge/FreeBSD-amd64-AB2B28?logo=freebsd&logoColor=white">
+    <img alt="Linux" src="https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-FCC624?logo=linux&logoColor=black">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-4c956c">
   </p>
 </div>
@@ -14,6 +15,8 @@ database, Node.js build, CGO, FFmpeg, or background cloud service is required.
 
 It is designed for small home servers and NAS appliances where the original
 photo library already has a useful folder structure and must remain untouched.
+
+![LiteGallery folder view](docs/screenshots/gallery.png)
 
 ## Highlights
 
@@ -28,8 +31,28 @@ photo library already has a useful folder structure and must remain untouched.
 - Pure-Go capture-time parsing for MP4-family video containers.
 - Disk-backed thumbnail and browser-generated video-poster cache.
 - Incremental cache warmer with locking, progress logs, and stale-entry pruning.
+- Browser-based collage editor with print-ready JPEG export and local project
+  files.
+- Count-aware collage templates, crop-quality checks, full-canvas focus mode,
+  and non-destructive zoom/pan previews for both the collage and source photos.
 - RAW files and unrelated sidecars, databases, archives, and documents stay
   out of the gallery.
+
+## Feature matrix
+
+| Capability | Support |
+| --- | --- |
+| Photos | JPEG, PNG, GIF, BMP, and TIFF |
+| Videos | MP4, MOV, M4V, AVI, MTS, M2TS, and 3GP |
+| RAW files | Hidden from the gallery |
+| EXIF | Capture time, camera, lens, exposure, ISO, dimensions, and GPS |
+| Sorting | Filename or capture date, in either direction |
+| Filters | All media, photos only, or videos only |
+| Previews | Disk-backed cache with scheduled warming |
+| Collages | 2–12 photos, reusable templates, crop tools, named local JSON/ZIP projects, and print-ready JPEG export |
+| Interface | Responsive layouts for phones, computers, and TVs |
+| Runtime | One static binary, without a database or FFmpeg |
+| Platforms | FreeBSD amd64 and Linux amd64/arm64 |
 
 ## Quick start
 
@@ -89,6 +112,73 @@ The viewer loads detailed EXIF only when its info button is opened. The cache
 warmer maintains compact per-directory metadata manifests so normal folder
 browsing does not rescan every original file.
 
+## Collage editor
+
+Open a folder, press **Collage**, and select between 2 and 12 photos. The editor
+can combine photos from several gallery folders and allows the same photo to
+fill more than one cell. A saved JSON or ZIP project can also be opened
+directly from the collage-selection bar.
+
+![LiteGallery collage editor](docs/screenshots/collage-editor.png)
+
+The editor includes:
+
+- layouts matched to the selected photo count, with horizontal and vertical
+  reflection controls instead of mirrored duplicates in the chooser;
+- automatic filling plus manual replacement, movement, and removal;
+- a folder tree that shows one gallery folder at a time and an **In collage**
+  tray with every photo used during the session. Clicking a tray photo that is
+  already placed selects its cell; a following click on an empty cell adds the
+  photo again, which is handy for photos from folders that are no longer open;
+- frame styles, decorative edge shapes, spacing, and colour palettes derived
+  from the background;
+- a 20-step undo/redo history;
+- a focus mode that gives the canvas the whole workspace, and zoom/pan
+  inspection for the collage and large photo previews that never changes the
+  exported result;
+- local projects saved as compact JSON or as a self-contained ZIP with photos;
+  opening another project asks before discarding unsaved changes;
+- print preflight with warnings that can be reviewed or explicitly ignored.
+
+Project compatibility is determined by the document `formatVersion`. The
+saved `appVersion` records which LiteGallery release created the project for
+diagnostics, but does not reject an otherwise compatible project.
+
+### Crop and rotate
+
+The crop editor moves and resizes the crop frame rather than the photo. It
+offers fixed-ratio and free-ratio modes, 90° left/right rotation, and live PPI
+feedback. Crop and rotation are kept in saved projects and in the exported
+JPEG.
+
+![Crop editor with rotation and quality feedback](docs/screenshots/crop-editor.png)
+
+### Print-ready JPEG export
+
+JPEG export supports 10 × 15, 13 × 18, 15 × 20, 20 × 30, and 30 × 45 cm, plus
+exact A4 (210 × 297 mm), at 300 PPI with an optional 2 mm bleed. The summary
+shows pixel dimensions, the weakest photo's PPI, and the estimated file size.
+
+![JPEG export settings and output estimate](docs/screenshots/jpeg-export.png)
+
+### How collages are processed
+
+Editing, rendering, and export happen in the browser. Project files and JPEGs
+are downloaded to the user's device, and original files in the gallery remain
+read-only. Selected originals are decoded one at a time before the first
+layout is shown, so the editor displays a loading state instead of a partially
+rendered collage without holding every original in memory at once. See
+[`docs/collage-editor-design.md`](docs/collage-editor-design.md) for the
+detailed product and technical decisions.
+
+### Limitations
+
+- The editor targets desktop and tablet browsers.
+- When the selected originals exceed 50 MB in total, the selection bar warns
+  that the browser may close because of limited memory, especially on a phone
+  or tablet. The warning does not block the collage.
+- TIFF files remain available in the gallery but cannot be used in collages.
+
 ## Cache warming
 
 Run the same binary as a one-shot scheduled task:
@@ -118,6 +208,10 @@ make build-freebsd
 ```
 
 The output is `build/litegallery-freebsd-amd64`.
+
+Builds from a Git checkout embed the value of `git describe` automatically.
+Pass `VERSION=<tag>` only when building from a source tree without matching Git
+metadata or when an explicit version override is required.
 
 For Linux-based NAS distributions, build all common architectures:
 
@@ -181,12 +275,61 @@ accounts or TLS.
 
 ## Development
 
+Node.js is used only for JavaScript tests, Playwright browser tests, and type
+checking. LiteGallery does not have a frontend build step and the shipped web
+assets remain embedded directly in the Go binary.
+
 ```sh
+npm ci
+npm run typecheck
+npm run test:js
+npm run test:e2e:essential
 go test ./...
 go vet ./...
 make build-freebsd
 make build-linux
 ```
+
+### Browser tests
+
+Playwright starts its own LiteGallery server on `127.0.0.1:18090` with
+generated demo fixtures, so only one run can be active at a time. After `npm ci`,
+install the browsers once with `npx playwright install chromium webkit firefox`.
+
+There are two suites:
+
+| Suite | Command | When | Scope |
+| --- | --- | --- | --- |
+| Essential | `npm run test:e2e:essential` | before every commit | tests tagged `@essential`, Chromium desktop only, stops at the first failure (about 15 seconds) |
+| Full | `npm run test:e2e:full` | before a release | every spec in every configured browser and viewport, stops after 3 failures |
+
+Useful variants:
+
+```sh
+# One spec while fixing it
+npx playwright test tests/e2e/project-export.spec.mjs --project=chromium-desktop --max-failures=1
+
+# Re-run only the tests that failed last time
+npx playwright test --last-failed --max-failures=3
+```
+
+A failing assertion waits up to the 45-second test timeout, so keep
+`--max-failures` on local runs instead of waiting for every broken test. Run the
+changed spec immediately after editing it. Tag a test as essential with
+`test('…', {tag: '@essential'}, async …)` only when it covers a core user flow;
+keep the essential suite short. Failure screenshots and traces are written to
+the temporary runtime directory printed in the report.
+
+### Documentation screenshots
+
+The screenshots in `docs/screenshots/` are generated from demo fixtures. After a
+visible UI change, refresh them with:
+
+```sh
+npm run screenshots:docs
+```
+
+Never use photos from a real library for documentation.
 
 User-visible changes belong in [`CHANGELOG.md`](CHANGELOG.md). Repository rules
 for coding agents are documented in [`AGENTS.md`](AGENTS.md).
