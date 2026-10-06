@@ -275,8 +275,8 @@ the server thumbnails do.
 - Future document migrations require an explicit versioned migration design
   and UI; compatibility must not be guessed silently.
 - TIFF remains visible in the gallery but is not selectable for collages.
-- Import-time handling of TIFF sources from legacy collage projects is outside
-  `v0.2.0`: no such projects exist, and TIFF remains unsupported in collages.
+- JSON and ZIP projects that reference TIFF sources are rejected on import
+  with the names of the affected photos.
 - The 12-photo selection ceiling is intentionally silent: clicking a 13th
   photo leaves the current selection unchanged without replacing the hint.
 - Collage format support is defined once in `web/collage/support.js` and used

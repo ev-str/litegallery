@@ -1,6 +1,7 @@
 // @ts-check
 
 import {validateProject} from './model.js';
+import {isCollageSupportedPath} from './support.js';
 
 export const PROJECT_FORMAT = 'litegallery-collage';
 export const PROJECT_FORMAT_VERSION = 1;
@@ -33,6 +34,10 @@ export function validateProjectDocument(input) {
     return {ok: false, reason: 'older-version', formatVersion: document.formatVersion, message: 'Для проекта требуется миграция'};
   }
   if (!document.project || typeof document.project !== 'object' || !isValidProject(document.project)) return invalid('В проекте отсутствуют обязательные поля');
+  const unsupported = Object.values(document.project.sources ?? {}).filter(source => !isCollageSupportedPath(source?.path ?? ''));
+  if (unsupported.length) {
+    return invalid(`Проект содержит фото в формате, который нельзя использовать в коллаже (TIFF): ${unsupported.map(source => source.name || source.path).join(', ')}`);
+  }
   return {ok: true, project: structuredClone(document.project)};
 }
 
