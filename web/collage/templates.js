@@ -401,8 +401,36 @@ add('11-portrait-left', 'portrait', columns([2, 3, 3, 3]));
 add('11-portrait-right', 'portrait', columns([3, 3, 3, 2]));
 add('12-portrait', 'portrait', columns([3, 3, 3, 3]));
 
+/** @param {CollageTemplate} template */
+function equivalenceSignature(template) {
+  return [
+    templateSignature(template),
+    templateSignature(template, true, false),
+    templateSignature(template, false, true),
+    templateSignature(template, true, true),
+  ].sort()[0];
+}
+
+// Keep one public definition per reflection-equivalence class. Older project
+// files may still name one of the removed definitions, so retain those exact
+// immutable templates privately: their original cell order is part of the
+// saved-project contract and must not be reconstructed from geometry alone.
+/** @type {CollageTemplate[]} */
+const canonicalDefinitions = [];
+/** @type {Map<string, CollageTemplate>} */
+const legacyTemplates = new Map();
+const canonicalSignatures = new Set();
+for (const template of definitions) {
+  const signature = `${template.photoCount}:${equivalenceSignature(template)}`;
+  if (canonicalSignatures.has(signature)) legacyTemplates.set(template.id, template);
+  else {
+    canonicalSignatures.add(signature);
+    canonicalDefinitions.push(template);
+  }
+}
+
 /** @type {ReadonlyArray<CollageTemplate>} */
-export const COLLAGE_TEMPLATES = Object.freeze(definitions);
+export const COLLAGE_TEMPLATES = Object.freeze(canonicalDefinitions);
 
 /** @param {number} photoCount */
 export function getTemplatesForCount(photoCount) {
@@ -410,37 +438,30 @@ export function getTemplatesForCount(photoCount) {
 }
 
 /**
- * Templates shown in the chooser. Horizontal mirror duplicates stay available
- * to old projects and getTemplate(), but occupy only one chooser slot.
+ * Templates shown in the chooser. The canonical catalogue is already unique
+ * under horizontal, vertical, and combined reflection.
  * @param {number} photoCount
  */
 export function getVisibleTemplatesForCount(photoCount) {
-  const templates = getTemplatesForCount(photoCount);
-  const seen = new Set();
-  return templates.filter(template => {
-    const canonical = [
-      templateSignature(template),
-      templateSignature(template, true, false),
-      templateSignature(template, false, true),
-      templateSignature(template, true, true),
-    ].sort()[0];
-    if (seen.has(canonical)) return false;
-    seen.add(canonical);
-    return true;
-  });
+  return getTemplatesForCount(photoCount);
+}
+
+/** @param {string} templateId */
+function storedTemplate(templateId) {
+  return COLLAGE_TEMPLATES.find(item => item.id === templateId) || legacyTemplates.get(templateId);
 }
 
 /** @param {string} templateId */
 export function getTemplate(templateId) {
-  const template = COLLAGE_TEMPLATES.find(item => item.id === templateId);
+  const template = storedTemplate(templateId);
   if (template) return template;
   for (const suffix of ['--flip-xy', '--flip-x', '--flip-y']) {
     if (!templateId.endsWith(suffix)) continue;
-    const source = COLLAGE_TEMPLATES.find(item => item.id === templateId.slice(0, -suffix.length));
+    const source = storedTemplate(templateId.slice(0, -suffix.length));
     if (source) return transformedTemplate(source, suffix !== '--flip-y', suffix !== '--flip-x', templateId);
   }
   if (templateId.endsWith('--mirror')) {
-    const source = COLLAGE_TEMPLATES.find(item => item.id === templateId.slice(0, -'--mirror'.length));
+    const source = storedTemplate(templateId.slice(0, -'--mirror'.length));
     if (source) return transformedTemplate(source, true, false, templateId);
   }
   throw new RangeError(`Unknown collage template: ${templateId}`);

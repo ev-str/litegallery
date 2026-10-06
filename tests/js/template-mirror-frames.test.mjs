@@ -43,6 +43,20 @@ const signature = (template, flipX = false, flipY = false) => template.cells
   .sort()
   .join('|');
 
+const LEGACY_TEMPLATE_IDS = [
+  '2-wide-right', '2-wide-bottom',
+  '3-hero-right', '3-hero-bottom', '3-portrait-right',
+  '4-hero-right', '4-hero-bottom', '4-wide-right-grid', '4-staggered-2', '4-staggered-12', '4-portrait-right',
+  '5-rows-3-2', '5-columns-3-2', '5-columns-3-2-wide', '5-rows-3-2-wide', '5-hero-right', '5-hero-bottom', '5-portrait-right',
+  '6-columns-4-2', '6-columns-4-2-wide', '6-hero-right', '6-hero-bottom', '6-portrait',
+  '7-columns-5-2', '7-columns-5-2-equal', '7-columns-5-2-wide', '7-hero-right', '7-hero-bottom', '7-portrait-right',
+  '8-columns-6-2', '8-columns-6-2-wide', '8-rows-6-2', '8-hero-right', '8-portrait-right',
+  '9-columns-6-3', '9-rows-6-3', '9-columns-6-3-wide', '9-hero-right', '9-portrait',
+  '10-rows-four-mirror', '10-columns-7-3', '10-columns-6-4', '10-rows-6-4', '10-hero-right', '10-portrait-right',
+  '11-rows-four-mirror', '11-columns-7-4', '11-columns-6-5', '11-columns-7-4-wide', '11-rows-6-5', '11-hero-right', '11-portrait-right',
+  '12-columns-7-5', '12-columns-8-4', '12-rows-7-5', '12-hero-right', '12-portrait',
+];
+
 function assertExactPartition(template) {
   assert.doesNotThrow(() => assertTemplatePartition(template));
   const area = template.cells.reduce((sum, cell) => sum + cell.rect.width * cell.rect.height, 0);
@@ -57,8 +71,8 @@ function assertExactPartition(template) {
   }
 }
 
-test('staggered template catalogue contains every approved exact partition', () => {
-  const expectedCounts = new Map([[4, 5], [5, 4], [6, 5], [7, 6], [8, 5]]);
+test('staggered template catalogue contains every approved canonical partition', () => {
+  const expectedCounts = new Map([[4, 3], [5, 4], [6, 5], [7, 6], [8, 5]]);
   for (const [photoCount, expected] of expectedCounts) {
     const templates = getTemplatesForCount(photoCount).filter(template => template.family === 'staggered');
     assert.equal(templates.length, expected, `${photoCount} photos must expose ${expected} staggered definitions`);
@@ -95,6 +109,16 @@ test('visible chooser removes duplicates under horizontal, vertical, and combine
   }
 });
 
+test('canonical catalogue contains no reflection-equivalent definitions', () => {
+  for (let photoCount = 2; photoCount <= 12; photoCount += 1) {
+    assert.deepEqual(
+      getTemplatesForCount(photoCount).map(template => template.id),
+      getVisibleTemplatesForCount(photoCount).map(template => template.id),
+      `${photoCount} canonical templates`,
+    );
+  }
+});
+
 test('curated chooser keeps the approved compact catalogue for two, three, and four photos', () => {
   assert.deepEqual(getVisibleTemplatesForCount(2).map(template => template.id), [
     '2-columns', '2-rows', '2-wide-left', '2-wide-top',
@@ -109,7 +133,7 @@ test('curated chooser keeps the approved compact catalogue for two, three, and f
   ]);
   assert.deepEqual(
     getTemplatesForCount(4).filter(template => template.family === 'staggered').map(template => template.id),
-    ['4-staggered-1', '4-staggered-2', '4-staggered-6', '4-staggered-11', '4-staggered-12'],
+    ['4-staggered-1', '4-staggered-6', '4-staggered-11'],
   );
   for (const removed of ['4-staggered-3', '4-staggered-4', '4-staggered-5', '4-staggered-7', '4-staggered-8', '4-staggered-9', '4-staggered-10']) {
     assert.equal(getVisibleTemplatesForCount(4).some(template => template.id === removed), false, removed);
@@ -186,14 +210,16 @@ test('virtual transforms preserve cell index and toggle independently on both ax
   }
 });
 
-test('legacy hidden mirror IDs resolve back to their visible canonical template', () => {
-  for (let photoCount = 2; photoCount <= 12; photoCount += 1) {
-    const visibleIds = new Set(getVisibleTemplatesForCount(photoCount).map(template => template.id));
-    for (const legacy of getTemplatesForCount(photoCount).filter(template => !visibleIds.has(template.id) && isTemplateMirrorable(template))) {
-      const canonicalId = getCanonicalTemplateId(legacy.id);
-      assert.equal(visibleIds.has(canonicalId), true, `${legacy.id} canonical must be visible`);
-      assert.equal(getMirroredTemplateId(legacy.id), canonicalId, `${legacy.id} must return to canonical`);
-    }
+test('all removed legacy IDs remain loadable without rejoining the canonical catalogue', () => {
+  assert.equal(LEGACY_TEMPLATE_IDS.length, 57);
+  const canonicalIds = new Set(Array.from({length: 11}, (_, index) => getTemplatesForCount(index + 2).map(template => template.id)).flat());
+  for (const legacyId of LEGACY_TEMPLATE_IDS) {
+    const legacy = getTemplate(legacyId);
+    const canonicalId = getCanonicalTemplateId(legacyId);
+    assert.equal(canonicalIds.has(legacyId), false, `${legacyId} must stay out of the canonical catalogue`);
+    assert.equal(canonicalIds.has(canonicalId), true, `${legacyId} canonical must be visible`);
+    assertExactPartition(legacy);
+    if (isTemplateMirrorable(legacy)) assert.equal(getMirroredTemplateId(legacyId), canonicalId, `${legacyId} must return to canonical`);
   }
 });
 
