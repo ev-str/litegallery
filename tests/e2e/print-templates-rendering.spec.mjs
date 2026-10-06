@@ -122,10 +122,12 @@ test('template rail exposes portrait variants whose geometry has at most three v
     await expect(button.locator('i')).toHaveCount(5);
   }
 
-  const audit = await page.evaluate(async () => {
-    const {getTemplatesForCount} = await import('/collage/templates.js');
+  const {audit, visiblePortraitIds} = await page.evaluate(async () => {
+    const {getTemplatesForCount, getVisibleTemplatesForCount} = await import('/collage/templates.js');
     const epsilon = 1e-9;
-    return Array.from({length: 11}, (_, index) => index + 2).flatMap(count =>
+    const counts = Array.from({length: 11}, (_, index) => index + 2);
+    const visiblePortraitIds = counts.flatMap(count => getVisibleTemplatesForCount(count).filter(template => template.family === 'portrait').map(template => template.id));
+    const audit = counts.flatMap(count =>
       getTemplatesForCount(count)
         .filter(template => template.family === 'portrait')
         .map(template => {
@@ -139,8 +141,11 @@ test('template rail exposes portrait variants whose geometry has at most three v
           return {id: template.id, count, maxVerticalLevels: Math.max(...verticalLevels), area};
         }),
     );
+    return {audit, visiblePortraitIds};
   });
-  expect(audit.length).toBeGreaterThanOrEqual(11);
+  // Every portrait layout the chooser can show must pass the geometry audit.
+  expect(visiblePortraitIds.length).toBeGreaterThan(0);
+  expect(audit.map(result => result.id)).toEqual(expect.arrayContaining(visiblePortraitIds));
   for (const result of audit) {
     expect(result.id).toMatch(new RegExp(`^${result.count}-portrait(?:-|$)`));
     expect(result.area).toBeCloseTo(1, 8);
