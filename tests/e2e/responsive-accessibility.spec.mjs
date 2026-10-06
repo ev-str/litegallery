@@ -203,7 +203,7 @@ test('primary collage path is keyboard focusable and crop reacts to arrows', asy
   await expect(editor(page)).toBeVisible();
 
   if (testInfo.project.use.viewport.width <= 767) {
-    await editor(page).getByRole('button', {name: 'Коллаж'}).click();
+    await editor(page).getByRole('button', {name: 'Коллаж', exact: true}).click();
   }
   await editor(page).getByRole('button', {name: 'Фотография 1'}).focus();
   await page.keyboard.press('Enter');
