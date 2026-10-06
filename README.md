@@ -108,6 +108,12 @@ Date sorting uses this order:
 2. Container creation time for supported MP4-family videos.
 3. Filesystem creation time as a fallback.
 
+Photos and videos open in a dark full-screen viewer. Its controls fade out
+after a short pause and return on any mouse, touch, or keyboard input; arrow
+keys and swipes move between items, and Space starts a slideshow.
+
+![Dark full-screen viewer](docs/screenshots/viewer.png)
+
 The viewer loads detailed EXIF only when its info button is opened. The cache
 warmer maintains compact per-directory metadata manifests so normal folder
 browsing does not rescan every original file.
