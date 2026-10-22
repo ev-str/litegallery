@@ -330,6 +330,10 @@ main {
   gap: var(--grid-gap);
 }
 
+/* Large folders render a window of rows; a focused tile outside it keeps its own cell. */
+.media-grid { position: relative; }
+.media-card.is-window-pinned { position: absolute; }
+
 .media-empty {
   grid-column: 1 / -1;
   padding: 46px 20px;

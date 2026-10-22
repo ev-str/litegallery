@@ -2,7 +2,9 @@ import {createCollageSelection} from './collage-selection.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
 import {createGalleryState, DENSITY_CHOICES} from './gallery-state.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
-import {queueVideoDuration, queueVideoPreview} from './video-posters.js';
+import {createLoadQueue} from './load-queue.js';
+import {createMediaWindow} from './media-window.js';
+import {pauseVideoWork, queueVideoDuration, queueVideoPreview, wakeVideoWork} from './video-posters.js';
 import {createViewer} from './viewer.js';
 
 const statusBox = document.querySelector('#status');
@@ -140,13 +142,33 @@ function trackThumbnail(card, image, {broken = true} = {}) {
   }, {once: true});
 }
 
-// Background work of a media render (video durations) stops when the grid is rebuilt.
-let mediaRender = new AbortController();
+// Thumbnails load through one bounded queue: visible tiles first, then the preload
+// range. A tile that leaves the grid drops its queued load and cancels a running one.
+const THUMBNAIL_REQUESTS = 6;
+const thumbnails = createLoadQueue({concurrency: THUMBNAIL_REQUESTS});
 
-function resetMediaRender() {
-  mediaRender.abort();
-  mediaRender = new AbortController();
-  return mediaRender.signal;
+/** @param {{signal: AbortSignal, priority: () => number}} work */
+function loadThumbnail(image, src, {signal, priority}) {
+  thumbnails.add(() => new Promise(resolve => {
+    const done = () => {
+      signal.removeEventListener('abort', cancel);
+      resolve(undefined);
+    };
+    const cancel = () => {
+      image.removeAttribute('src');
+      done();
+    };
+    image.addEventListener('load', done, {once: true});
+    image.addEventListener('error', done, {once: true});
+    signal.addEventListener('abort', cancel, {once: true});
+    image.src = src;
+  }), {signal, priority});
+}
+
+// The viewer's own media comes first: gallery work waits while it is open.
+function pauseGalleryWork(paused) {
+  thumbnails.setConcurrency(paused ? 0 : THUMBNAIL_REQUESTS);
+  pauseVideoWork(paused);
 }
 
 // Latest request wins: only the newest load may touch history, the grids, and busy state.
@@ -155,7 +177,7 @@ let loadController = null;
 let skeletonTimer = 0;
 
 function renderSkeletons() {
-  clearGrid(mediaGrid);
+  mediaWindow.clear();
   const fragment = document.createDocumentFragment();
   for (let index = 0; index < gridColumns() * 2; index++) {
     const skeleton = document.createElement('span');
@@ -171,6 +193,15 @@ function renderSkeletons() {
 const nameCollator = new Intl.Collator('ru', {numeric: true, sensitivity: 'base'});
 const viewer = createViewer(document.querySelector('#viewer'), {onClose: returnFromViewer});
 const selection = createCollageSelection({onModeChange: applyMediaView, getCurrentPath: () => state.path});
+const mediaWindow = createMediaWindow({
+  grid: mediaGrid,
+  createCard: createMediaCard,
+  viewportTop: () => header.getBoundingClientRect().bottom,
+  onChange: () => {
+    thumbnails.wake();
+    wakeVideoWork();
+  },
+});
 
 function sortByName(items, descending) {
   const sorted = [...items].sort((left, right) => nameCollator.compare(left.name, right.name));
@@ -222,9 +253,8 @@ async function load(path, push = true) {
   clearTimeout(skeletonTimer);
   statusBox.textContent = 'Загрузка…';
   cancelFolderCounts();
-  resetMediaRender();
   clearGrid(foldersGrid);
-  clearGrid(mediaGrid);
+  mediaWindow.clear();
   delete mediaSection.dataset.loading;
   foldersSection.hidden = true;
   mediaSection.hidden = true;
@@ -254,7 +284,7 @@ async function load(path, push = true) {
     if (token !== loadToken) return;
     clearTimeout(skeletonTimer);
     delete mediaSection.dataset.loading;
-    clearGrid(mediaGrid);
+    mediaWindow.clear();
     mediaSection.hidden = true;
     statusBox.textContent = error.message;
   } finally {
@@ -314,75 +344,81 @@ function renderFolders(items) {
 }
 
 function renderMedia(items) {
-  const signal = resetMediaRender();
-  clearGrid(mediaGrid);
   mediaSection.hidden = allMedia.length === 0;
   mediaCount.textContent = formatCount(items.length, ['файл', 'файла', 'файлов']);
   updateMediaControls();
   if (items.length === 0) {
+    mediaWindow.clear();
     const empty = document.createElement('div');
     empty.className = 'media-empty';
     empty.textContent = 'Здесь нет файлов выбранного типа';
     mediaGrid.append(empty);
     return;
   }
-  const fragment = document.createDocumentFragment();
-  for (const [index, item] of items.entries()) {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = `media-card gallery-item ${item.kind}`;
-    card.dataset.path = item.path;
-    card.title = item.name;
-    if (!selection.decorateCard(card, item)) card.setAttribute('aria-label', `Открыть ${item.name}`);
-    const version = `${item.modTime}-${item.size}`;
-    if (item.kind === 'image') {
-      const image = document.createElement('img');
-      image.loading = 'lazy';
-      image.alt = '';
-      image.src = apiURL('/api/thumb', item.path, version);
-      trackThumbnail(card, image);
-      card.append(image);
-    } else {
-      const poster = document.createElement('img');
-      poster.className = 'video-poster';
-      poster.loading = 'lazy';
-      poster.alt = '';
-      poster.src = apiURL('/api/video-poster', item.path, version);
-      trackThumbnail(card, poster, {broken: false});
-      poster.addEventListener('error', () => {
-        poster.classList.add('is-missing');
-        queueVideoPreview(item, poster, () => markBroken(card));
-      }, {once: true});
-      const preview = document.createElement('span');
-      preview.className = 'video-preview';
-      preview.innerHTML = `<span class="play">${iconMarkup('play')}</span>`;
-      card.append(poster, preview);
-    }
-    const overlay = document.createElement('span');
-    overlay.className = 'media-caption';
-    overlay.id = `media-caption-${index}`;
-    overlay.innerHTML = '<span class="media-meta"></span><span class="media-details"></span>';
-    const primary = overlay.querySelector('.media-meta');
-    primary.textContent = formatDate(item.sortTime);
-    overlay.querySelector('.media-details').textContent = formatFileDetails(item);
-    card.setAttribute('aria-describedby', overlay.id);
-    if (item.kind === 'video') {
-      whenVisible(card, () => queueVideoDuration(item, seconds => {
-        primary.textContent = formatDuration(seconds);
-        card.classList.add('has-duration');
-      }, signal));
-    }
-    card.append(overlay);
-    card.addEventListener('click', () => {
-      if (selection.handleCardClick(item, card)) return;
-      const index = media.findIndex(entry => entry.path === item.path);
-      state.lastOpened = {folder: state.path, path: item.path, index};
-      state.saveView(state.path, {focusPath: item.path});
-      viewer.open(media, index);
-    });
-    fragment.append(card);
+  mediaWindow.setItems(items);
+}
+
+/**
+ * One media tile; the window creates it when the tile comes near the viewport.
+ * @param {{signal: AbortSignal, priority: () => number}} work aborts when the tile leaves the grid
+ */
+function createMediaCard(item, index, work) {
+  const card = document.createElement('button');
+  card.type = 'button';
+  card.className = `media-card gallery-item ${item.kind}`;
+  card.dataset.path = item.path;
+  card.title = item.name;
+  if (!selection.decorateCard(card, item)) card.setAttribute('aria-label', `Открыть ${item.name}`);
+  const version = `${item.modTime}-${item.size}`;
+  if (item.kind === 'image') {
+    const image = document.createElement('img');
+    image.decoding = 'async';
+    image.alt = '';
+    trackThumbnail(card, image);
+    loadThumbnail(image, apiURL('/api/thumb', item.path, version), work);
+    card.append(image);
+  } else {
+    const poster = document.createElement('img');
+    poster.className = 'video-poster';
+    poster.decoding = 'async';
+    poster.alt = '';
+    trackThumbnail(card, poster, {broken: false});
+    poster.addEventListener('error', () => {
+      if (work.signal.aborted) return;
+      poster.classList.add('is-missing');
+      queueVideoPreview(item, poster, () => markBroken(card), work);
+    }, {once: true});
+    loadThumbnail(poster, apiURL('/api/video-poster', item.path, version), work);
+    const preview = document.createElement('span');
+    preview.className = 'video-preview';
+    preview.innerHTML = `<span class="play">${iconMarkup('play')}</span>`;
+    card.append(poster, preview);
   }
-  mediaGrid.append(fragment);
+  const overlay = document.createElement('span');
+  overlay.className = 'media-caption';
+  overlay.id = `media-caption-${index}`;
+  overlay.innerHTML = '<span class="media-meta"></span><span class="media-details"></span>';
+  const primary = overlay.querySelector('.media-meta');
+  primary.textContent = formatDate(item.sortTime);
+  overlay.querySelector('.media-details').textContent = formatFileDetails(item);
+  card.setAttribute('aria-describedby', overlay.id);
+  if (item.kind === 'video') {
+    whenVisible(card, () => queueVideoDuration(item, seconds => {
+      primary.textContent = formatDuration(seconds);
+      card.classList.add('has-duration');
+    }, work.signal, work.priority));
+    work.signal.addEventListener('abort', () => visibility.unobserve(card), {once: true});
+  }
+  card.append(overlay);
+  card.addEventListener('click', () => {
+    if (selection.handleCardClick(item, card)) return;
+    const index = media.findIndex(entry => entry.path === item.path);
+    state.lastOpened = {folder: state.path, path: item.path, index};
+    state.saveView(state.path, {focusPath: item.path});
+    pauseGalleryWork(true);
+    viewer.open(media, index);
+  });
+  return card;
 }
 
 function renderBreadcrumbs() {
@@ -411,6 +447,11 @@ function galleryItems() {
 
 function findItem(path) {
   return path ? main.querySelector(`.gallery-item[data-path="${CSS.escape(path)}"]`) : null;
+}
+
+// A media tile outside the rendered window is created on demand.
+function tileFor(path) {
+  return findItem(path) ?? mediaWindow.reveal(path);
 }
 
 // First tile not hidden by the sticky header; tiles are in layout order, so bisect.
@@ -442,11 +483,12 @@ function rememberView() {
 // Called right after a render: scrollTo forces the layout of the new grid.
 function restoreView(path) {
   const view = state.view(path);
-  const anchor = findItem(view?.anchorPath);
+  const anchor = tileFor(view?.anchorPath);
   const top = anchor ? scrollY + anchor.getBoundingClientRect().top - view.anchorOffset : view?.scrollY ?? 0;
   scrollTo({top, behavior: 'instant'});
+  mediaWindow.sync();
   // The grids were rebuilt, so focus that was on a tile is lost; other focus stays.
-  if (document.activeElement === document.body) findItem(view?.focusPath)?.focus({preventScroll: true});
+  if (document.activeElement === document.body) tileFor(view?.focusPath)?.focus({preventScroll: true});
 }
 
 // Re-render without a jump: the anchor keeps its place on screen.
@@ -471,12 +513,13 @@ function flashLastOpened(tile) {
 // After the viewer: focus the tile it was opened from, else its nearest neighbour,
 // else the refresh button in the sticky header.
 function returnFromViewer() {
+  pauseGalleryWork(false);
   const opened = state.lastOpened;
   if (!opened) return;
   const sameFolder = opened.folder === state.shownPath;
-  const tile = sameFolder ? findItem(opened.path) : null;
-  const cards = mediaGrid.querySelectorAll('.media-card');
-  const target = tile || (sameFolder ? cards[Math.min(opened.index, cards.length - 1)] : null) || galleryItems()[0] || refreshButton;
+  const tile = sameFolder ? tileFor(opened.path) : null;
+  const neighbour = sameFolder && media.length ? mediaWindow.revealIndex(Math.min(opened.index, media.length - 1)) : null;
+  const target = tile || neighbour || galleryItems()[0] || refreshButton;
   target.focus({preventScroll: true});
   // Pointer users get no :focus-visible after a programmatic focus; show the ring anyway.
   target.classList.add('is-return-focus');
@@ -487,9 +530,16 @@ function returnFromViewer() {
 }
 
 // Arrow keys move focus to the nearest gallery card in that direction (TV remotes).
+// Inside the media grid the move follows the list, so it crosses the rendered window.
 function focusInDirection(key) {
   const active = document.activeElement;
   if (!active?.classList.contains('gallery-item')) return false;
+  const next = active.classList.contains('media-card') ? mediaWindow.neighbour(active, key) : null;
+  if (next) {
+    next.focus({preventScroll: true});
+    next.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
+    return true;
+  }
   const cards = [...document.querySelectorAll('.gallery-item:not([hidden])')];
   const from = active.getBoundingClientRect();
   const fx = from.left + from.width / 2;
@@ -548,9 +598,13 @@ densityControl.addEventListener('click', event => {
   keepInPlace(firstVisibleItem(), () => {
     state.setColumns(deviceClass(), Number(button.dataset.columns));
     applyDensity();
+    mediaWindow.relayout();
   });
 });
-phoneQuery.addEventListener('change', () => keepInPlace(firstVisibleItem(), applyDensity));
+phoneQuery.addEventListener('change', () => keepInPlace(firstVisibleItem(), () => {
+  applyDensity();
+  mediaWindow.relayout();
+}));
 
 main.addEventListener('focusin', event => {
   const item = event.target.closest('.gallery-item');

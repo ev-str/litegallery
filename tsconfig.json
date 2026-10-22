@@ -16,6 +16,8 @@
     "skipLibCheck": true
   },
   "include": [
-    "web/collage/**/*.js"
+    "web/collage/**/*.js",
+    "web/load-queue.js",
+    "web/media-window.js"
   ]
 }
