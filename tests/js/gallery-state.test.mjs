@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {createGalleryState, DEFAULT_DENSITY, DENSITY_CHOICES, VIEWS_KEY} from '../../web/gallery-state.js';
+import {createGalleryState, DEFAULT_DENSITY, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL, VIEWS_KEY} from '../../web/gallery-state.js';
 
 function memoryStorage(entries = {}) {
   const values = new Map(Object.entries(entries));
@@ -87,4 +87,62 @@ test('damaged or unavailable session storage only loses views', () => {
   const limited = createGalleryState({local: memoryStorage(), session: full});
   limited.saveView('', {scrollY: 12});
   assert.deepEqual(limited.view(''), {scrollY: 12});
+});
+
+test('an opened folder remembers its recursive mode in its view and its address', () => {
+  const session = memoryStorage();
+  const state = createGalleryState({...readPageURL('?path=Album%20A&recursive=1'), local: memoryStorage(), session});
+  assert.equal(state.path, 'Album A');
+  assert.equal(state.recursive, true);
+  assert.equal(state.recursiveFor('Album A'), false);
+
+  state.saveView('Album A', {scrollY: 300, focusPath: 'Album A/2024/IMG_1.jpg'});
+  state.saveView('Album A', {recursive: true});
+  assert.equal(state.recursiveFor('Album A'), true);
+  assert.equal(state.recursiveFor('Album B'), false);
+  assert.deepEqual(createGalleryState({local: memoryStorage(), session}).view('Album A'), {scrollY: 300, focusPath: 'Album A/2024/IMG_1.jpg', recursive: true});
+
+  assert.equal(listingURL('Album A', true), '/api/list?path=Album%20A&recursive=1');
+  assert.equal(listingURL('Album A', false), '/api/list?path=Album%20A');
+  assert.equal(pageURL('Album A/2024', true), '/?path=Album%20A%2F2024&recursive=1');
+  assert.equal(pageURL('Album A', false), '/?path=Album%20A');
+  assert.deepEqual(readPageURL('?path=Album%20A'), {path: 'Album A', recursive: false});
+});
+
+test('the root never lists recursively, even with a stored or addressed mode', () => {
+  for (const root of ['', '.', '/', './', '//', './/']) {
+    assert.equal(isRoot(root), true);
+    assert.equal(listingURL(root, true), `/api/list?path=${encodeURIComponent(root)}`);
+  }
+  assert.equal(isRoot('.hidden-name'), false);
+  for (const folder of ['..', '...', '....', '.../']) {
+    assert.equal(isRoot(folder), false, folder);
+    assert.equal(listingURL(folder, true), `/api/list?path=${encodeURIComponent(folder)}&recursive=1`);
+    assert.equal(pageURL(folder, true), `/?path=${encodeURIComponent(folder)}&recursive=1`);
+    assert.deepEqual(readPageURL(`?path=${encodeURIComponent(folder)}&recursive=1`), {path: folder, recursive: true});
+  }
+  assert.equal(pageURL('', true), '/');
+  assert.deepEqual(readPageURL('?recursive=1'), {path: '', recursive: false});
+  assert.deepEqual(readPageURL('?path=.&recursive=1'), {path: '.', recursive: false});
+
+  const state = createGalleryState({path: '', recursive: true, local: memoryStorage(), session: memoryStorage()});
+  assert.equal(state.recursive, false);
+  state.saveView('', {recursive: true});
+  assert.equal(state.view('')?.recursive, true);
+  assert.equal(state.recursiveFor(''), false);
+});
+
+test('the recursive mode leaves the other controls and the folder view alone', () => {
+  const local = memoryStorage({'gallery-media-sort': 'name', 'gallery-media-filter': 'video', 'gallery-media-order': 'asc', 'gallery-density-desktop': '7'});
+  const state = createGalleryState({path: 'Album A', local, session: memoryStorage()});
+  const before = {...Object.fromEntries(local.values)};
+  state.saveView('Album A', {scrollY: 900, anchorPath: 'Album A/Photo 09.png', anchorOffset: 80, focusPath: 'Album A/Photo 10.png'});
+  state.saveView('Album A', {recursive: true});
+  state.saveView('Album A', {recursive: false});
+  assert.deepEqual(Object.fromEntries(local.values), before);
+  assert.equal(state.filter, 'video');
+  assert.equal(state.sortKey, 'name');
+  assert.equal(state.descending, false);
+  assert.equal(state.columns('desktop'), 7);
+  assert.deepEqual(state.view('Album A'), {scrollY: 900, anchorPath: 'Album A/Photo 09.png', anchorOffset: 80, focusPath: 'Album A/Photo 10.png', recursive: false});
 });

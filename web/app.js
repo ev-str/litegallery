@@ -1,6 +1,6 @@
 import {createCollageSelection} from './collage-selection.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
-import {createGalleryState, DENSITY_CHOICES} from './gallery-state.js';
+import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
 import {createLoadQueue} from './load-queue.js';
 import {createMediaWindow} from './media-window.js';
@@ -22,12 +22,12 @@ const mediaFilter = document.querySelector('#mediaFilter');
 const emptyState = document.querySelector('#emptyState');
 const refreshButton = document.querySelector('#refresh');
 const tvButton = document.querySelector('#tvMode');
+const recursiveToggle = document.querySelector('#recursiveToggle');
 const densityControl = document.querySelector('#gridDensity');
 const header = document.querySelector('.topbar');
 const main = document.querySelector('main');
 
-const urlPath = () => new URLSearchParams(location.search).get('path') || '';
-const state = createGalleryState({path: urlPath(), local: localStorage, session: sessionStorage});
+const state = createGalleryState({...readPageURL(location.search), local: localStorage, session: sessionStorage});
 let directories = [];
 let allMedia = [];
 let media = [];
@@ -245,11 +245,18 @@ function applyMediaView() {
   renderMedia(media);
 }
 
-async function load(path, push = true) {
+/**
+ * @param {string} path
+ * @param {{history?: 'push'|'replace'|'none', recursive?: boolean}} options
+ *   recursive defaults to the mode the folder was last shown with
+ */
+async function load(path, {history: address = 'push', recursive = state.recursiveFor(path)} = {}) {
   const token = ++loadToken;
   rememberView();
   state.shownPath = null;
   state.requestedPath = path;
+  state.recursive = recursive && !isRoot(path);
+  updateRecursiveToggle();
   loadController?.abort();
   loadController = new AbortController();
   const {signal} = loadController;
@@ -267,20 +274,25 @@ async function load(path, push = true) {
   refreshButton.setAttribute('aria-busy', 'true');
   skeletonTimer = setTimeout(renderSkeletons, 150);
   try {
-    const response = await fetch(apiURL('/api/list', path), {signal});
+    const response = await fetch(listingURL(path, state.recursive), {signal});
     if (!response.ok) throw new Error('Каталог недоступен');
     const data = await response.json();
     if (token !== loadToken) return;
     state.path = state.requestedPath = data.path === '.' ? '' : data.path;
     document.title = state.path ? `${data.title} — ${state.path}` : data.title;
     document.querySelector('#brand').textContent = data.title;
-    // Repeating the shown folder (refresh, its breadcrumb) adds no history entry.
-    if (push && urlPath() !== state.path) history.pushState({path: state.path}, '', state.path ? `?path=${encodeURIComponent(state.path)}` : '/');
+    // Repeating the shown folder (refresh, its breadcrumb) adds no history entry;
+    // switching the recursive mode rewrites the current one.
+    const target = pageURL(state.path, state.recursive);
+    if (address === 'replace') history.replaceState({path: state.path, recursive: state.recursive}, '', target);
+    else if (address === 'push' && location.pathname + location.search !== target) history.pushState({path: state.path, recursive: state.recursive}, '', target);
+    if (state.path) state.saveView(state.path, {recursive: state.recursive});
     renderBreadcrumbs();
     clearTimeout(skeletonTimer);
     delete mediaSection.dataset.loading;
     render(data.entries);
     emptyState.hidden = data.entries.length > 0;
+    emptyState.querySelector('span').textContent = state.recursive ? 'В этой папке и её подпапках нет фотографий и видео' : 'В этой папке нет фотографий, видео и вложенных папок';
     statusBox.textContent = data.entries.length ? formatCount(data.entries.length, ['элемент', 'элемента', 'элементов']) : '';
     state.shownPath = state.path;
     restoreView(state.path);
@@ -300,9 +312,33 @@ async function load(path, push = true) {
   }
 }
 
+// Recursive listings name every file by its path below the opened folder; a tile
+// shows that subfolder only when another file in the listing has the same name.
+let subfolders = new Map();
+
+function subfolderContext(items, folder) {
+  const prefix = folder ? `${folder}/` : '';
+  const names = new Map();
+  for (const item of items) {
+    const key = item.name.toLowerCase();
+    names.set(key, (names.get(key) ?? 0) + 1);
+  }
+  return new Map(items.map(item => {
+    const relative = item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path;
+    const parent = relative.slice(0, -item.name.length).replace(/\/$/, '');
+    return [item.path, {relative, folder: names.get(item.name.toLowerCase()) > 1 ? parent || 'Эта папка' : null}];
+  }));
+}
+
+function updateRecursiveToggle() {
+  recursiveToggle.hidden = isRoot(state.requestedPath);
+  recursiveToggle.setAttribute('aria-pressed', String(state.recursive));
+}
+
 function render(entries) {
   directories = entries.filter(item => item.kind === 'directory');
   allMedia = entries.filter(item => item.kind !== 'directory');
+  subfolders = state.recursive ? subfolderContext(allMedia, state.path) : new Map();
   renderFolders(sortByName(directories, state.folderDescending));
   applyMediaView();
 }
@@ -372,8 +408,9 @@ function createMediaCard(item, index, work) {
   card.type = 'button';
   card.className = `media-card gallery-item ${item.kind}`;
   card.dataset.path = item.path;
-  card.title = item.name;
-  if (!selection.decorateCard(card, item)) card.setAttribute('aria-label', `Открыть ${item.name}`);
+  const context = subfolders.get(item.path);
+  card.title = context?.relative ?? item.name;
+  if (!selection.decorateCard(card, item)) card.setAttribute('aria-label', `Открыть ${context?.relative ?? item.name}`);
   const version = `${item.modTime}-${item.size}`;
   if (item.kind === 'image') {
     const image = document.createElement('img');
@@ -406,6 +443,12 @@ function createMediaCard(item, index, work) {
   const primary = overlay.querySelector('.media-meta');
   primary.textContent = formatDate(item.sortTime);
   overlay.querySelector('.media-details').textContent = formatFileDetails(item);
+  if (context?.folder) {
+    const folder = document.createElement('span');
+    folder.className = 'media-folder';
+    folder.textContent = context.folder;
+    overlay.prepend(folder);
+  }
   card.setAttribute('aria-describedby', overlay.id);
   if (item.kind === 'video') {
     whenVisible(card, () => queueVideoDuration(item, seconds => {
@@ -625,7 +668,7 @@ addEventListener('pagehide', rememberView);
 history.scrollRestoration = 'manual';
 
 // After an interrupted navigation or a failed load the address catches up.
-refreshButton.onclick = () => load(state.requestedPath);
+refreshButton.onclick = () => load(state.requestedPath, {recursive: state.recursive});
 // TV shows the current selection, filter and sort applied, from its first item. The viewer
 // requests fullscreen synchronously inside this click.
 tvButton.onclick = () => {
@@ -634,7 +677,11 @@ tvButton.onclick = () => {
   pauseGalleryWork(true);
   viewer.openTV(media, 0);
 };
-addEventListener('popstate', event => load(event.state?.path || urlPath(), false));
+recursiveToggle.addEventListener('click', () => load(state.requestedPath, {history: 'replace', recursive: !state.recursive}));
+addEventListener('popstate', () => {
+  const {path, recursive} = readPageURL(location.search);
+  load(path, {history: 'none', recursive});
+});
 addEventListener('keydown', event => {
   if (viewer.isOpen) {
     viewer.handleKey(event);
@@ -648,4 +695,4 @@ addEventListener('keydown', event => {
 });
 
 applyDensity();
-load(state.path, false);
+load(state.path, {history: 'none', recursive: state.recursive});

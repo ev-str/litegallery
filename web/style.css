@@ -138,6 +138,52 @@ main {
   font-size: .88rem;
 }
 
+.gallery-toolbar { display: flex; align-items: center; gap: 12px; }
+.gallery-toolbar #status { flex: 1 1 auto; min-width: 0; }
+
+/* A checkbox-like toggle: the box and its check mark show the state without colour. */
+.scope-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-height);
+  padding: 7px 13px 7px 11px;
+  color: var(--ink);
+  background: rgba(255, 253, 249, .8);
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 650;
+}
+.scope-toggle[hidden] { display: none; }
+.scope-toggle::before {
+  content: '';
+  width: 1em;
+  height: 1em;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  font-size: .9rem;
+  line-height: 1;
+}
+.scope-toggle[aria-pressed="true"] { color: #4b3528; background: var(--paper); border-color: var(--accent); }
+.scope-toggle[aria-pressed="true"]::before { content: '✓'; color: white; background: var(--accent); border-color: var(--accent); }
+.scope-toggle:hover, .scope-toggle:focus-visible { background: var(--paper); outline: 3px solid rgba(187, 118, 84, .22); }
+
+.media-folder {
+  display: block;
+  overflow: hidden;
+  margin-bottom: 1px;
+  color: rgba(255, 255, 255, .86);
+  font-size: .7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .collection-section { margin-top: 22px; }
 .collection-section[data-loading="true"] .section-heading { visibility: hidden; }
 

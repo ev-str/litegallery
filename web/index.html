@@ -54,7 +54,10 @@
     </div>
   </header>
   <main>
-    <div id="status" role="status">Загрузка…</div>
+    <div class="gallery-toolbar">
+      <div id="status" role="status">Загрузка…</div>
+      <button id="recursiveToggle" class="scope-toggle" type="button" aria-pressed="false" title="Показать файлы из всех вложенных папок" hidden>Из подпапок</button>
+    </div>
     <div id="emptyState" class="gallery-empty" hidden>
       <strong>Здесь пока пусто</strong>
       <span>В этой папке нет фотографий, видео и вложенных папок</span>
