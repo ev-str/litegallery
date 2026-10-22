@@ -31,17 +31,27 @@
     <symbol id="icon-flip-horizontal" viewBox="0 0 24 24"><path d="m8 3-4 4 4 4M4 7h16M16 21l4-4-4-4M20 17H4"/></symbol>
     <symbol id="icon-flip-vertical" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16"/></symbol>
     <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="icon-image-off" viewBox="0 0 24 24"><path d="m3 3 18 18M10.4 5H19a2 2 0 0 1 2 2v8.6M19 21H5a2 2 0 0 1-2-2V7c0-.7.4-1.4 1-1.7M21 17l-4.5-4.5M3 16l5-5 7 7"/></symbol>
   </svg>
   <header class="topbar">
     <a class="brand" id="brand" href="/">Gallery</a>
     <nav id="breadcrumbs" aria-label="Путь"></nav>
     <div class="topbar-actions">
+      <div id="gridDensity" class="density-segments" role="group" aria-label="Колонок в сетке">
+        <button type="button" data-density-step="0"></button>
+        <button type="button" data-density-step="1"></button>
+        <button type="button" data-density-step="2"></button>
+      </div>
       <button id="collageMode" class="collage-entry-button" type="button" aria-label="Выбрать фотографии для коллажа">Коллаж</button>
       <button id="refresh" class="icon-button" type="button" title="Обновить" aria-label="Обновить"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg></button>
     </div>
   </header>
   <main>
-    <div id="status">Загрузка…</div>
+    <div id="status" role="status">Загрузка…</div>
+    <div id="emptyState" class="gallery-empty" hidden>
+      <strong>Здесь пока пусто</strong>
+      <span>В этой папке нет фотографий, видео и вложенных папок</span>
+    </div>
     <section id="foldersSection" class="collection-section" hidden>
       <div class="section-heading">
         <h1>Папки</h1>

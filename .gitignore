@@ -3,5 +3,6 @@
 /cache/
 /node_modules/
 /litegallery
+/docs/backlog.md
 .DS_Store
 *.log

@@ -1,4 +1,4 @@
-import {apiURL} from './format.js';
+import {apiURL, formatBytes, formatFileType} from './format.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
 
 // Controls fade out after a pause; any pointer, touch, or key input brings them
@@ -101,6 +101,19 @@ export function createViewer(dialog) {
     exifContent.append(row);
   }
 
+  // Format and size come from the listing, so they show even without EXIF.
+  function addFileRows(item) {
+    addEXIFRow('Формат', formatFileType(item));
+    addEXIFRow('Файл', formatBytes(item.size));
+  }
+
+  function addEXIFNote(text) {
+    const note = document.createElement('p');
+    note.className = 'exif-note';
+    note.textContent = text;
+    exifContent.append(note);
+  }
+
   async function toggleEXIF() {
     if (!exifPanel.hidden) return closeEXIF();
     const item = items[index];
@@ -115,10 +128,8 @@ export function createViewer(dialog) {
       const data = await response.json();
       if (items[index]?.path !== requestedPath || exifPanel.hidden) return;
       exifContent.replaceChildren();
-      if (!data.hasMetadata) {
-        exifContent.textContent = 'В этом файле EXIF не найден.';
-        return;
-      }
+      addFileRows(item);
+      if (!data.hasMetadata) return addEXIFNote('В этом файле EXIF не найден.');
       addEXIFRow('Снято', data.capturedAt);
       addEXIFRow('Камера', data.camera);
       addEXIFRow('Объектив', data.lens);
@@ -130,7 +141,10 @@ export function createViewer(dialog) {
       addEXIFRow('Координаты', data.position ? `${data.position.latitude.toFixed(6)}, ${data.position.longitude.toFixed(6)}` : '');
       addEXIFRow('Высота', data.position?.altitude ? `${data.position.altitude.toFixed(1)} м` : '');
     } catch (error) {
-      exifContent.textContent = error.message;
+      if (items[index]?.path !== requestedPath || exifPanel.hidden) return;
+      exifContent.replaceChildren();
+      addFileRows(item);
+      addEXIFNote(error.message);
     }
   }
 

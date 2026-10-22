@@ -87,8 +87,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 253, 250, .96);
-  border-bottom: 1px solid var(--collage-line);
+  background: var(--header-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+  border-bottom: 1px solid var(--line);
 }
 .collage-project-name { width: clamp(150px, 18vw, 270px); min-height: 40px; box-sizing: border-box; padding: 7px 11px; color: var(--collage-ink); background: var(--collage-paper); border: 1px solid var(--collage-line); border-radius: 11px; font: inherit; font-size: 1.02rem; font-weight: 700; }
 .collage-project-name:focus { outline: 2px solid rgba(181, 107, 72, .28); border-color: var(--collage-accent); }
