@@ -513,6 +513,30 @@ main {
   object-fit: contain;
 }
 
+/* Once decoded, a photo is laid out at its own pixel size and placed by the viewer's
+   display-only transform; videos and photos still loading use the contain layout above. */
+.stage[data-kind="image"] { touch-action: none; }
+.stage[data-photo="ready"] { cursor: zoom-in; }
+.stage[data-photo="ready"]:not([data-view="fit"]) { cursor: zoom-out; }
+.stage[data-pannable="true"] { cursor: grab; }
+.stage[data-gesture="pan"] { cursor: grabbing; }
+#viewer[data-idle="true"] .stage { cursor: none; }
+
+.stage[data-photo="ready"] img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  max-height: none;
+  object-fit: fill;
+  transform-origin: 50% 50%;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.stage[data-photo="ready"] img.is-animated { transition: transform .2s ease; }
+
 .stage:fullscreen,
 .stage:-webkit-full-screen {
   padding: 0;
@@ -557,7 +581,7 @@ main {
 }
 
 .viewer-button:hover { background: rgba(48, 42, 37, .78); }
-.viewer-button:focus-visible, .slideshow:focus-visible { outline: 3px solid #f2c6a8; outline-offset: 3px; }
+.viewer-button:focus-visible, .slideshow:focus-visible, .viewer-tool:focus-visible { outline: 3px solid #f2c6a8; outline-offset: 3px; }
 .viewer-button[hidden] { display: none; }
 .fullscreen { top: 16px; left: 18px; width: 46px; height: 46px; border-radius: 50%; font-size: 1.25rem; }
 .info { top: 72px; left: 18px; width: 46px; height: 46px; border-radius: 50%; font-size: 1.25rem; }
@@ -580,7 +604,36 @@ main {
   background: linear-gradient(transparent, rgba(0, 0, 0, .72));
 }
 
-.caption { overflow: hidden; color: var(--viewer-ink); text-overflow: ellipsis; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); white-space: nowrap; }
+.caption { flex: 1 1 0; min-width: 0; overflow: hidden; color: var(--viewer-ink); text-overflow: ellipsis; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); white-space: nowrap; }
+
+.photo-tools, .viewer-actions { flex: none; display: flex; align-items: center; gap: 6px; }
+/* Caption and actions share the free space, so the photo tools sit in the middle. */
+.viewer-actions { flex: 1 1 0; justify-content: flex-end; }
+.photo-tools[hidden] { display: none; }
+
+.viewer-tool {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  color: var(--viewer-ink);
+  background: var(--viewer-glass);
+  border: 1px solid var(--viewer-line);
+  border-radius: 14px;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.viewer-tool:hover { background: rgba(48, 42, 37, .78); }
+.viewer-tool[aria-pressed="true"] { background: rgba(169, 104, 73, .78); border-color: rgba(242, 198, 168, .5); }
+.viewer-tool[aria-disabled="true"] { opacity: .42; cursor: default; }
+.zoom-level { min-width: 3.4em; color: var(--viewer-muted); font-size: .8rem; font-variant-numeric: tabular-nums; text-align: center; }
 .slideshow {
   flex: none;
   min-height: 42px;
@@ -646,8 +699,12 @@ main {
   .prev { left: 6px; }
   .next { right: 6px; }
   .caption { font-size: .78rem; }
-  #viewer footer { padding: 36px 10px 10px; }
-  .exif-panel { position: fixed; top: auto; right: 10px; bottom: 72px; left: 10px; width: auto; max-height: min(60vh, 520px); border-radius: 20px; }
+  #viewer footer { flex-wrap: wrap; gap: 8px 10px; padding: 36px 10px 10px; }
+  .photo-tools { order: -1; flex: 1 0 100%; justify-content: center; }
+  .zoom-level { display: none; }
+  .viewer-tool { width: 40px; height: 40px; }
+  .viewer-actions { flex: none; }
+  .exif-panel { position: fixed; top: auto; right: 10px; bottom: 112px; left: 10px; width: auto; max-height: min(60vh, 520px); border-radius: 20px; }
 }
 
 @media (min-width: 1500px) {
@@ -659,4 +716,5 @@ main {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
   .media-skeleton, .media-card.is-loading, .icon-button.is-busy .icon { animation: none; }
   .gallery-item.is-last-opened { animation: gallery-last-opened-still 1.2s steps(1, end); }
+  .stage[data-photo="ready"] img, .stage[data-photo="ready"] img.is-animated { transition: none; }
 }

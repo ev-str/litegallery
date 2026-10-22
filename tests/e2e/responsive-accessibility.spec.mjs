@@ -254,3 +254,98 @@ test('primary collage path is keyboard focusable and crop reacts to arrows', asy
   await stage.press('ArrowRight');
   await expect.poll(() => page.locator('[data-crop-dialog] .collage-crop-frame').getAttribute('style')).not.toBe(before);
 });
+
+/** Multi-finger touch input through CDP; Playwright's touchscreen only taps. Touch projects are Chromium. */
+async function touchInput(page) {
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type, points) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints: points.map(([x, y], id) => ({x, y, id}))});
+  const lerp = (from, to, t) => from.map((value, axis) => value + (to[axis] - value) * t);
+  return {
+    /** Move every finger from `from[i]` to `to[i]` in a few steps, then lift them all. */
+    async gesture(from, to, steps = 6) {
+      await send('touchStart', from);
+      for (let step = 1; step <= steps; step += 1) await send('touchMove', from.map((point, index) => lerp(point, to[index], step / steps)));
+      await send('touchEnd', []);
+    },
+    async doubleTap(point) {
+      for (let tap = 0; tap < 2; tap += 1) {
+        await send('touchStart', [point]);
+        await send('touchEnd', []);
+      }
+    },
+  };
+}
+
+async function openTouchPhoto(page) {
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await page.goto(`/?path=${encodeURIComponent('Album A')}`);
+  await page.locator('#mediaGrid .media-card[data-path="Album A/Photo 07.png"]').click();
+  const viewer = page.locator('#viewer');
+  await expect(viewer.locator('.stage')).toHaveAttribute('data-photo', 'ready');
+  return viewer;
+}
+
+const photoRect = viewer => viewer.locator('.stage img').evaluate(image => {
+  const {left, top, width, height} = image.getBoundingClientRect();
+  return {left, top, width, height};
+});
+
+test('touch: pinch and double-tap zoom, drag pans without swiping, Fit swipes again', {tag: '@essential'}, async ({page}, testInfo) => {
+  test.skip(!testInfo.project.use.hasTouch, 'Touch gesture contract');
+  const viewer = await openTouchPhoto(page);
+  const stage = viewer.locator('.stage');
+  const caption = viewer.locator('.caption');
+  const opened = await caption.textContent();
+  const {width, height} = page.viewportSize() ?? {width: 0, height: 0};
+  const centre = [width / 2, height / 2];
+  const touch = await touchInput(page);
+  const fitted = await photoRect(viewer);
+
+  await touch.gesture([[centre[0] - 40, centre[1]], [centre[0] + 40, centre[1]]], [[centre[0] - 100, centre[1]], [centre[0] + 100, centre[1]]]);
+  await expect(stage).toHaveAttribute('data-view', 'zoom');
+  const pinched = await photoRect(viewer);
+  expect(pinched.width / fitted.width).toBeCloseTo(200 / 80, 1);
+  await expect(caption).toHaveText(opened ?? '');
+
+  // A horizontal drag on the zoomed photo pans it and does not change photos.
+  await touch.gesture([[centre[0] + 60, centre[1]]], [[centre[0] - 60, centre[1] + 20]]);
+  const panned = await photoRect(viewer);
+  expect(panned.left).toBeCloseTo(pinched.left - 120, 0);
+  await expect(caption).toHaveText(opened ?? '');
+
+  await touch.doubleTap(centre);
+  await expect(stage).toHaveAttribute('data-view', 'fit');
+  expect(await photoRect(viewer)).toEqual(fitted);
+  await touch.doubleTap(centre);
+  await expect(stage).toHaveAttribute('data-view', 'zoom');
+  await expect(stage).toHaveAttribute('data-pannable', 'true');
+  await touch.doubleTap(centre);
+  await expect(stage).toHaveAttribute('data-view', 'fit');
+
+  await touch.gesture([[centre[0] + 100, centre[1]]], [[centre[0] - 100, centre[1]]]);
+  await expect(caption).not.toHaveText(opened ?? '');
+  await expect(stage).toHaveAttribute('data-view', 'fit');
+});
+
+test('viewer photo tools fit the touch viewport and clear the EXIF panel', async ({page}, testInfo) => {
+  test.skip(!testInfo.project.use.hasTouch, 'Touch layout contract');
+  const viewer = await openTouchPhoto(page);
+  const {width} = page.viewportSize() ?? {width: 0};
+  const controls = viewer.locator('.photo-tools button, .viewer-actions > *');
+  await expect(controls).toHaveCount(8);
+  const boxes = await controls.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(0);
+    expect(box.right).toBeLessThanOrEqual(width);
+    expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(40);
+  }
+  // No two controls overlap.
+  for (const [index, a] of boxes.entries()) {
+    for (const b of boxes.slice(index + 1)) expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
+  }
+  // The EXIF panel leaves the photo tools usable.
+  await viewer.getByRole('button', {name: 'Информация о фотографии'}).click();
+  const panel = await viewer.locator('.exif-panel').evaluate(element => element.getBoundingClientRect().toJSON());
+  const tools = await viewer.locator('.photo-tools').evaluate(element => element.getBoundingClientRect().toJSON());
+  expect(panel.bottom <= tools.top || panel.right <= tools.left || panel.left >= tools.right).toBe(true);
+});

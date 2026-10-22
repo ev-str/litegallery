@@ -31,6 +31,10 @@
     <symbol id="icon-flip-horizontal" viewBox="0 0 24 24"><path d="m8 3-4 4 4 4M4 7h16M16 21l4-4-4-4M20 17H4"/></symbol>
     <symbol id="icon-flip-vertical" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4M17 20V4M3 8l4-4 4 4M7 4v16"/></symbol>
     <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="icon-zoom-in" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6M11 8v6"/></symbol>
+    <symbol id="icon-zoom-out" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M8 11h6"/></symbol>
+    <symbol id="icon-fit" viewBox="0 0 24 24"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"/><rect x="8" y="8" width="8" height="8" rx="1"/></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
     <symbol id="icon-image-off" viewBox="0 0 24 24"><path d="m3 3 18 18M10.4 5H19a2 2 0 0 1 2 2v8.6M19 21H5a2 2 0 0 1-2-2V7c0-.7.4-1.4 1-1.7M21 17l-4.5-4.5M3 16l5-5 7 7"/></symbol>
   </svg>
   <header class="topbar">
@@ -103,7 +107,22 @@
       </aside>
     </div>
     <button class="viewer-button next" type="button" aria-label="Следующее"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-chevron-right"></use></svg></button>
-    <footer><span class="caption"></span><button class="slideshow" type="button"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg><span>Слайд-шоу</span></button></footer>
+    <footer>
+      <span class="caption"></span>
+      <div class="photo-tools" role="group" aria-label="Масштаб и поворот">
+        <button class="viewer-tool zoom-out" type="button" aria-label="Уменьшить" title="Уменьшить (−)"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-out"></use></svg></button>
+        <output class="zoom-level">100%</output>
+        <button class="viewer-tool zoom-in" type="button" aria-label="Увеличить" title="Увеличить (+)"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-zoom-in"></use></svg></button>
+        <button class="viewer-tool fit" type="button" aria-label="Вписать в экран" title="Вписать в экран (0)" aria-pressed="true"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-fit"></use></svg></button>
+        <button class="viewer-tool original" type="button" aria-label="Исходный размер" title="Исходный размер 1:1 (1)" aria-pressed="false">1:1</button>
+        <button class="viewer-tool rotate-left" type="button" aria-label="Повернуть влево" title="Повернуть влево (Shift+R)"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-rotate-ccw"></use></svg></button>
+        <button class="viewer-tool rotate-right" type="button" aria-label="Повернуть вправо" title="Повернуть вправо (R)"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-rotate-cw"></use></svg></button>
+      </div>
+      <div class="viewer-actions">
+        <a class="viewer-tool download" href="/" download aria-label="Скачать оригинал" title="Скачать оригинал"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg></a>
+        <button class="slideshow" type="button"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-play"></use></svg><span>Слайд-шоу</span></button>
+      </div>
+    </footer>
   </dialog>
   <dialog id="collageEditor" class="collage-editor" aria-label="Редактор коллажа"></dialog>
   <input id="collageProjectInput" type="file" accept="application/json,application/zip,.json,.zip" hidden>
