@@ -119,9 +119,18 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	recursive, ok := parseRecursive(r.URL.Query().Get("recursive"))
+	if !ok {
+		http.Error(w, "invalid recursive value", http.StatusBadRequest)
+		return
+	}
 	rel, abs, err := s.resolve(r.URL.Query().Get("path"))
 	if err != nil {
 		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+	if recursive {
+		s.handleRecursiveList(w, r, rel, abs)
 		return
 	}
 	items, err := os.ReadDir(abs)
@@ -149,16 +158,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		if kind == "" {
 			continue
 		}
-		sortTime := fileCreatedUnix(info)
-		if cached, ok := metadata.Files[item.Name()]; ok && cached.matches(kind, info) {
-			if cached.Created != 0 {
-				sortTime = cached.Created
-			}
-			if cached.Captured != 0 {
-				sortTime = cached.Captured
-			}
-		}
-		entries = append(entries, Entry{Name: item.Name(), Path: childRel, Kind: kind, Size: info.Size(), ModTime: info.ModTime().Format("2006-01-02T15:04:05Z07:00"), SortTime: sortTime})
+		entries = append(entries, mediaEntry(item.Name(), childRel, kind, info, metadata))
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
 		if entries[i].Kind == "directory" && entries[j].Kind != "directory" {
@@ -171,6 +171,19 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	})
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, listing{Path: rel, Title: s.cfg.Title, Entries: entries})
+}
+
+func mediaEntry(name, rel, kind string, info os.FileInfo, metadata metadataManifest) Entry {
+	sortTime := fileCreatedUnix(info)
+	if cached, ok := metadata.Files[name]; ok && cached.matches(kind, info) {
+		if cached.Created != 0 {
+			sortTime = cached.Created
+		}
+		if cached.Captured != 0 {
+			sortTime = cached.Captured
+		}
+	}
+	return Entry{Name: name, Path: rel, Kind: kind, Size: info.Size(), ModTime: info.ModTime().Format("2006-01-02T15:04:05Z07:00"), SortTime: sortTime}
 }
 
 func (s *Server) resolve(input string) (string, string, error) {
