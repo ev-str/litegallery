@@ -332,7 +332,7 @@ test('viewer photo tools fit the touch viewport and clear the EXIF panel', async
   const viewer = await openTouchPhoto(page);
   const {width} = page.viewportSize() ?? {width: 0};
   const controls = viewer.locator('.photo-tools button, .viewer-actions > *');
-  await expect(controls).toHaveCount(8);
+  await expect(controls).toHaveCount(11);
   const boxes = await controls.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
   for (const box of boxes) {
     expect(box.left).toBeGreaterThanOrEqual(0);

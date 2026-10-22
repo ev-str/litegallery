@@ -21,6 +21,7 @@ const mediaDirection = document.querySelector('#mediaDirection');
 const mediaFilter = document.querySelector('#mediaFilter');
 const emptyState = document.querySelector('#emptyState');
 const refreshButton = document.querySelector('#refresh');
+const tvButton = document.querySelector('#tvMode');
 const densityControl = document.querySelector('#gridDensity');
 const header = document.querySelector('.topbar');
 const main = document.querySelector('main');
@@ -30,6 +31,8 @@ const state = createGalleryState({path: urlPath(), local: localStorage, session:
 let directories = [];
 let allMedia = [];
 let media = [];
+/** Header control that opened the viewer; null when a tile did. */
+let viewerOpener = null;
 
 // Fixed grid density, stored separately for phones and for desktop/TV screens.
 const phoneQuery = matchMedia('(max-width: 700px)');
@@ -259,6 +262,7 @@ async function load(path, push = true) {
   foldersSection.hidden = true;
   mediaSection.hidden = true;
   emptyState.hidden = true;
+  tvButton.disabled = true;
   refreshButton.classList.add('is-busy');
   refreshButton.setAttribute('aria-busy', 'true');
   skeletonTimer = setTimeout(renderSkeletons, 150);
@@ -344,6 +348,7 @@ function renderFolders(items) {
 }
 
 function renderMedia(items) {
+  tvButton.disabled = items.length === 0;
   mediaSection.hidden = allMedia.length === 0;
   mediaCount.textContent = formatCount(items.length, ['файл', 'файла', 'файлов']);
   updateMediaControls();
@@ -415,6 +420,7 @@ function createMediaCard(item, index, work) {
     const index = media.findIndex(entry => entry.path === item.path);
     state.lastOpened = {folder: state.path, path: item.path, index};
     state.saveView(state.path, {focusPath: item.path});
+    viewerOpener = null;
     pauseGalleryWork(true);
     viewer.open(media, index);
   });
@@ -510,10 +516,15 @@ function flashLastOpened(tile) {
   tile.addEventListener('animationend', done);
 }
 
-// After the viewer: focus the tile it was opened from, else its nearest neighbour,
-// else the refresh button in the sticky header.
+// After the viewer: focus the header TV button if TV started there; else the tile it was
+// opened from, else its nearest neighbour, else the refresh button in the sticky header.
 function returnFromViewer() {
   pauseGalleryWork(false);
+  if (viewerOpener) {
+    viewerOpener.focus({preventScroll: true});
+    viewerOpener = null;
+    return;
+  }
   const opened = state.lastOpened;
   if (!opened) return;
   const sameFolder = opened.folder === state.shownPath;
@@ -615,6 +626,14 @@ history.scrollRestoration = 'manual';
 
 // After an interrupted navigation or a failed load the address catches up.
 refreshButton.onclick = () => load(state.requestedPath);
+// TV shows the current selection, filter and sort applied, from its first item. The viewer
+// requests fullscreen synchronously inside this click.
+tvButton.onclick = () => {
+  if (!media.length || viewer.isOpen) return;
+  viewerOpener = tvButton;
+  pauseGalleryWork(true);
+  viewer.openTV(media, 0);
+};
 addEventListener('popstate', event => load(event.state?.path || urlPath(), false));
 addEventListener('keydown', event => {
   if (viewer.isOpen) {

@@ -18,6 +18,7 @@
   "include": [
     "web/collage/**/*.js",
     "web/load-queue.js",
-    "web/media-window.js"
+    "web/media-window.js",
+    "web/slideshow.js"
   ]
 }

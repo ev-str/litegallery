@@ -121,6 +121,8 @@ nav button:hover, nav button:focus-visible, .icon-button:hover, .icon-button:foc
 }
 
 .icon-button { font-size: 1.25rem; }
+.icon-button:disabled { opacity: .38; cursor: default; }
+.icon-button:disabled:hover { background: transparent; outline: none; }
 .icon-button.is-busy .icon { animation: gallery-spin .9s linear infinite; }
 @keyframes gallery-spin { to { transform: rotate(360deg); } }
 
@@ -497,6 +499,11 @@ main {
 #viewer::backdrop { background: rgba(0, 0, 0, .86); }
 #viewer[data-idle="true"] { cursor: none; }
 
+/* Holds the whole viewer so TV mode can make it fullscreen; it fills the dialog exactly. */
+.viewer-frame { position: absolute; inset: 0; overflow: hidden; background: #0b0a09; }
+.viewer-frame:focus { outline: none; }
+.viewer-frame:fullscreen { background: #000; }
+
 .stage {
   position: relative;
   width: 100%;
@@ -616,6 +623,7 @@ main {
 .photo-tools[hidden] { display: none; }
 
 .viewer-tool {
+  flex: none;
   display: grid;
   place-items: center;
   width: 42px;
@@ -651,6 +659,63 @@ main {
   cursor: pointer;
 }
 .slideshow[aria-pressed="true"] { background: rgba(169, 104, 73, .78); border-color: rgba(242, 198, 168, .5); }
+.slideshow-interval {
+  flex: none;
+  height: 42px;
+  padding: 0 10px;
+  color: var(--viewer-ink);
+  background: var(--viewer-glass);
+  border: 1px solid var(--viewer-line);
+  border-radius: 14px;
+  font: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+}
+.slideshow-interval option { color: #1d1915; background: #f7f3ec; }
+.slideshow-interval:focus-visible { outline: 3px solid #f2c6a8; outline-offset: 3px; }
+
+/* Broken media stay open with a calm explanation instead of a broken-image glyph. */
+.stage[data-error="true"] > img, .stage[data-error="true"] > video { display: none; }
+.stage-error { margin: 0; color: var(--viewer-muted); font-size: 1rem; text-align: center; }
+.stage-error .icon { margin-right: .45em; font-size: 1.3em; }
+
+/* Quiet, non-modal note about skipped media or an unavailable TV mode. */
+.viewer-notice {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  left: 50%;
+  max-width: min(520px, calc(100vw - 150px));
+  padding: 9px 16px;
+  color: var(--viewer-ink);
+  background: rgba(22, 19, 17, .86);
+  border: 1px solid var(--viewer-line);
+  border-radius: 14px;
+  font-size: .88rem;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.viewer-notice[hidden] { display: none; }
+
+/* TV mode: the viewer fills the screen and every control is sized for a remote. */
+#viewer[data-tv="true"] { background: #000; }
+#viewer[data-tv="true"] .fullscreen { display: none; }
+#viewer[data-tv="true"] .close { width: 64px; height: 64px; font-size: 1.8rem; top: 24px; right: 28px; }
+#viewer[data-tv="true"] .info { top: 24px; left: 28px; width: 64px; height: 64px; font-size: 1.8rem; }
+#viewer[data-tv="true"] .prev, #viewer[data-tv="true"] .next { top: calc(50% - 48px); width: 72px; height: 96px; border-radius: 22px; font-size: 2.4rem; }
+#viewer[data-tv="true"] .prev { left: 24px; }
+#viewer[data-tv="true"] .next { right: 24px; }
+#viewer[data-tv="true"] footer { gap: 22px; padding: 64px 48px 32px; }
+#viewer[data-tv="true"] .caption { font-size: 1.35rem; }
+#viewer[data-tv="true"] .photo-tools, #viewer[data-tv="true"] .viewer-actions { gap: 12px; }
+#viewer[data-tv="true"] .viewer-tool { width: 64px; height: 64px; border-radius: 20px; font-size: 1.15rem; }
+#viewer[data-tv="true"] .viewer-tool .icon { font-size: 1.6rem; }
+#viewer[data-tv="true"] .zoom-level { font-size: 1.05rem; }
+#viewer[data-tv="true"] .slideshow { min-height: 64px; padding: 10px 24px; border-radius: 20px; font-size: 1.3rem; }
+#viewer[data-tv="true"] .slideshow-interval { height: 64px; padding: 0 16px; border-radius: 20px; font-size: 1.2rem; }
+#viewer[data-tv="true"] .viewer-notice { top: 32px; padding: 14px 24px; font-size: 1.2rem; }
+#viewer[data-tv="true"] :is(.viewer-button, .viewer-tool, .slideshow, .slideshow-interval):focus-visible { outline-width: 5px; outline-offset: 4px; }
 
 .exif-panel {
   position: absolute;
@@ -678,6 +743,13 @@ main {
 .exif-row dt { color: var(--viewer-muted); }
 .exif-row dd { margin: 0; color: var(--viewer-ink); overflow-wrap: anywhere; }
 .exif-note { margin: 0; padding: 10px 0 0; border-top: 1px solid var(--viewer-line); }
+
+/* Below this width the photo tools and slideshow actions no longer fit one centred row. */
+@media (max-width: 1199px) {
+  #viewer footer { flex-wrap: wrap; row-gap: 10px; }
+  .photo-tools { order: -1; flex: 1 0 100%; justify-content: center; }
+  .exif-panel { max-height: calc(100% - 190px); }
+}
 
 @media (max-width: 700px) {
   :root { --header-height: 58px; --grid-gap: 6px; --tile-radius: 12px; }
@@ -707,8 +779,10 @@ main {
   .photo-tools { order: -1; flex: 1 0 100%; justify-content: center; }
   .zoom-level { display: none; }
   .viewer-tool { width: 40px; height: 40px; }
-  .viewer-actions { flex: none; }
-  .exif-panel { position: fixed; top: auto; right: 10px; bottom: 112px; left: 10px; width: auto; max-height: min(60vh, 520px); border-radius: 20px; }
+  .viewer-actions { flex: 1 0 100%; justify-content: center; }
+  .slideshow { min-height: 40px; padding: 6px 12px; }
+  .slideshow-interval { height: 40px; }
+  .exif-panel { position: fixed; top: auto; right: 10px; bottom: 136px; left: 10px; width: auto; max-height: min(60vh, 520px); border-radius: 20px; }
 }
 
 @media (min-width: 1500px) {

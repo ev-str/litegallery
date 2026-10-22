@@ -1,12 +1,13 @@
 import {apiURL, formatBytes, formatFileType} from './format.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
+import {createAutoplay, createPlaylist, readInterval, writeInterval} from './slideshow.js';
 import {canPan, initialView, panBy, rotate, scaleLimits, setMode, settle, toggleZoom, zoomAt, ZOOM_STEP} from './viewer-transform.js';
 
 // Controls fade out after a pause; any pointer, touch, or key input brings them
 // back. They stay visible while EXIF is open or the pointer rests on them, and
 // CSS keeps the keyboard-focused control visible.
 const IDLE_MS = 2500;
-const SLIDESHOW_MS = 5000;
+const NOTICE_MS = 4000;
 const SWIPE_PX = 60;
 const TAP_PX = 10;
 const DOUBLE_TAP_MS = 300;
@@ -31,11 +32,27 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
   const fitButton = dialog.querySelector('.fit');
   const originalButton = dialog.querySelector('.original');
   const downloadLink = dialog.querySelector('.download');
+  const shuffleButton = dialog.querySelector('.shuffle');
+  const intervalSelect = dialog.querySelector('.slideshow-interval');
+  const tvButton = dialog.querySelector('.tv');
+  const notice = dialog.querySelector('.viewer-notice');
+  // A <dialog> cannot itself be fullscreen, so TV mode enlarges the frame holding all of its content.
+  const viewerFrame = dialog.querySelector('.viewer-frame');
 
   let items = [];
   let index = -1;
-  let slideTimer = null;
   let idleTimer = 0;
+  let noticeTimer = 0;
+  // Manual Previous/Next and autoplay walk the same playlist; autoplay skips media known to fail.
+  const playlist = createPlaylist();
+  const failed = new Set();
+  const storage = (() => {
+    try { return localStorage; } catch { return null; }
+  })();
+  const autoplay = createAutoplay(advance, {seconds: readInterval(storage)});
+  // TV mode lives exactly as long as the viewer frame is the fullscreen element.
+  let tv = false;
+  let tvRequested = false;
   // Display-only transform of the current photo; every newly shown item starts in Fit.
   let view = initialView();
   // Accumulated quarter turns, so the CSS rotation animates the short way across 0°/360°.
@@ -52,6 +69,8 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
   function open(list, startIndex) {
     items = list;
     index = startIndex;
+    failed.clear();
+    playlist.reset(items.length, index);
     showCurrent();
     if (!dialog.open) {
       dialog.showModal();
@@ -70,14 +89,23 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
 
   function hideControls() {
     if (!dialog.open) return;
-    if (!exifPanel.hidden || dialog.querySelector('.viewer-button:hover, footer:hover')) {
+    // On a TV the whole chrome stays while a remote or keyboard is on one of its controls.
+    if (!exifPanel.hidden || (tv && keyboardOnControl()) || dialog.querySelector('.viewer-button:hover, footer:hover')) {
       idleTimer = setTimeout(hideControls, IDLE_MS);
       return;
     }
     dialog.dataset.idle = 'true';
   }
 
-  function showCurrent() {
+  /** @param {boolean} [byAutoplay] media that fails while autoplay shows it is skipped */
+  /** Keyboard focus on a real control; the dialog, frame, and stage surfaces do not count. */
+  function keyboardOnControl() {
+    const active = document.activeElement;
+    return active instanceof Element && dialog.contains(active) && active.matches(':focus-visible') &&
+      Boolean(active.closest('button, a, select, input, textarea, video'));
+  }
+
+  function showCurrent(byAutoplay = false) {
     if (index < 0 || index >= items.length) return;
     const item = items[index];
     closeEXIF();
@@ -103,6 +131,8 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
       }, {once: true});
       element = image;
     }
+    const shown = element;
+    element.addEventListener('error', () => mediaFailed(shown, item, byAutoplay), {once: true});
     element.src = source;
     stage.dataset.kind = item.kind;
     infoButton.hidden = item.kind !== 'image';
@@ -124,6 +154,34 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     lastTap = null;
     delete stage.dataset.photo;
     delete stage.dataset.gesture;
+    delete stage.dataset.error;
+  }
+
+  /** A broken item stays open with a calm error state; autoplay moves on and says so. */
+  function mediaFailed(element, item, byAutoplay) {
+    if (element.parentNode !== stage) return;
+    failed.add(index);
+    stage.dataset.error = 'true';
+    const message = document.createElement('p');
+    message.className = 'stage-error';
+    message.innerHTML = iconLabelMarkup('image-off', 'Не удалось открыть файл');
+    stage.append(message);
+    if (!byAutoplay || !autoplay.playing) return;
+    showNotice(`Пропущен файл ${item.name}: не удалось открыть`);
+    advance();
+  }
+
+  function showNotice(text) {
+    notice.textContent = text;
+    notice.hidden = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(hideNotice, NOTICE_MS);
+  }
+
+  function hideNotice() {
+    clearTimeout(noticeTimer);
+    notice.hidden = true;
+    notice.textContent = '';
   }
 
   /** Fit fills the stage's content box; panning is bounded by the whole stage. */
@@ -191,10 +249,27 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     if (photo) update(rotate(view, frame(), quarterTurns));
   }
 
+  /** Manual Previous/Next; a running slideshow gives the new item a full interval. */
   function move(delta) {
     if (!items.length) return;
-    index = (index + delta + items.length) % items.length;
+    const next = delta > 0 ? playlist.next() : playlist.previous();
+    if (next === null) return;
+    index = next;
     showCurrent();
+    autoplay.schedule();
+  }
+
+  /** One autoplay step: the next item that is not known to fail, or a stop when none is left. */
+  function advance() {
+    const next = playlist.next(failed);
+    if (next === null) {
+      stopSlideshow();
+      showNotice('Слайд-шоу остановлено: не удалось открыть ни один файл');
+      return;
+    }
+    index = next;
+    showCurrent(true);
+    autoplay.schedule();
   }
 
   function closeEXIF() {
@@ -262,33 +337,111 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     }
   }
 
+  function renderSlideshow() {
+    slideButton.innerHTML = autoplay.playing ? iconLabelMarkup('pause', 'Стоп') : iconLabelMarkup('play', 'Слайд-шоу');
+    slideButton.setAttribute('aria-pressed', String(autoplay.playing));
+  }
+
   function stopSlideshow() {
-    clearInterval(slideTimer);
-    slideTimer = null;
-    slideButton.innerHTML = iconLabelMarkup('play', 'Слайд-шоу');
-    slideButton.setAttribute('aria-pressed', 'false');
+    autoplay.stop();
+    renderSlideshow();
   }
 
   function toggleSlideshow() {
-    if (slideTimer) return stopSlideshow();
-    slideTimer = setInterval(() => move(1), SLIDESHOW_MS);
-    slideButton.innerHTML = iconLabelMarkup('pause', 'Стоп');
-    slideButton.setAttribute('aria-pressed', 'true');
+    if (autoplay.playing) autoplay.stop();
+    else autoplay.start();
+    renderSlideshow();
+  }
+
+  function toggleShuffle() {
+    playlist.shuffle = !playlist.shuffle;
+    shuffleButton.setAttribute('aria-pressed', String(playlist.shuffle));
+  }
+
+  function changeInterval() {
+    const seconds = Number(intervalSelect.value);
+    writeInterval(storage, seconds);
+    autoplay.setSeconds(seconds);
   }
 
   function fullscreenElement() {
     return document.fullscreenElement || document.webkitFullscreenElement;
   }
 
+  async function exitFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    try {
+      if (fullscreenElement() && exit) await exit.call(document);
+    } catch (error) {
+      console.warn('Leaving fullscreen failed:', error);
+    }
+  }
+
+  /** TV mode puts the whole viewer, controls included, into fullscreen. */
+  async function toggleTV() {
+    if (tv) {
+      leaveTV();
+      return exitFullscreen();
+    }
+    const request = viewerFrame.requestFullscreen || viewerFrame.webkitRequestFullscreen;
+    if (!request) return showNotice('Режим TV недоступен: браузер не поддерживает полный экран');
+    tvRequested = true;
+    try {
+      await request.call(viewerFrame);
+    } catch (error) {
+      tvRequested = false;
+      console.warn('Fullscreen request was rejected:', error);
+      return showNotice('Режим TV недоступен: браузер не разрешил полный экран');
+    }
+    // Older WebKit enters fullscreen later and reports it through the change event.
+    if (fullscreenElement() === viewerFrame) enterTV();
+  }
+
+  function enterTV() {
+    tvRequested = false;
+    if (tv) return;
+    tv = true;
+    dialog.dataset.tv = 'true';
+    tvButton.setAttribute('aria-pressed', 'true');
+    tvButton.setAttribute('aria-label', 'Выйти из режима TV');
+    // Remote arrows act on the viewer surface, not on the button that started TV mode. The frame
+    // takes focus because some browsers keep focus out of a fullscreen element's ancestors.
+    viewerFrame.focus({preventScroll: true});
+    wake();
+  }
+
+  /** Leaving fullscreen ends TV mode and pauses the slideshow. */
+  function leaveTV() {
+    tvRequested = false;
+    if (!tv) return;
+    tv = false;
+    delete dialog.dataset.tv;
+    tvButton.setAttribute('aria-pressed', 'false');
+    tvButton.setAttribute('aria-label', 'Режим TV');
+    stopSlideshow();
+    wake();
+  }
+
+  function fullscreenChanged() {
+    updateFullscreenButton();
+    if (fullscreenElement() === viewerFrame) {
+      if (tvRequested) enterTV();
+    } else {
+      leaveTV();
+    }
+  }
+
+  function fullscreenFailed() {
+    if (!tvRequested) return;
+    tvRequested = false;
+    showNotice('Режим TV недоступен: браузер не разрешил полный экран');
+  }
+
   async function toggleFullscreen(event) {
     event?.preventDefault();
     event?.stopPropagation();
     try {
-      if (fullscreenElement()) {
-        const exit = document.exitFullscreen || document.webkitExitFullscreen;
-        if (exit) await exit.call(document);
-        return;
-      }
+      if (fullscreenElement()) return await exitFullscreen();
       const mediaElement = stage.querySelector('video, img');
       if (mediaElement?.tagName === 'VIDEO' && typeof mediaElement.webkitEnterFullscreen === 'function') {
         mediaElement.webkitEnterFullscreen();
@@ -315,7 +468,7 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     if (event.target instanceof Element && event.target.closest('button, a, input, select, textarea, video')) return;
     if (event.key === 'ArrowLeft') move(-1);
     if (event.key === 'ArrowRight') move(1);
-    if (event.key === ' ') {
+    if (event.key === ' ' || event.key === 'MediaPlayPause') {
       event.preventDefault();
       toggleSlideshow();
     }
@@ -331,7 +484,7 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
 
   // Controls and the EXIF panel keep their own pointer and wheel behaviour; the footer's
   // transparent gradient over the photo does not.
-  const isControl = target => Boolean(target.closest?.('button, a, output, .caption, .exif-panel'));
+  const isControl = target => Boolean(target.closest?.('button, a, output, select, .caption, .exif-panel'));
 
   function startGesture(event) {
     lastPointerType = event.pointerType;
@@ -405,6 +558,10 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
   dialog.querySelector('.prev').onclick = () => move(-1);
   dialog.querySelector('.next').onclick = () => move(1);
   slideButton.onclick = toggleSlideshow;
+  shuffleButton.onclick = toggleShuffle;
+  intervalSelect.value = String(autoplay.seconds);
+  intervalSelect.onchange = changeInterval;
+  tvButton.onclick = toggleTV;
   fullscreenButton.onclick = toggleFullscreen;
   infoButton.onclick = toggleEXIF;
   infoButton.setAttribute('aria-expanded', 'false');
@@ -420,10 +577,15 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     stage.webkitRequestFullscreen ||
     HTMLVideoElement.prototype.webkitEnterFullscreen
   );
-  document.addEventListener('fullscreenchange', updateFullscreenButton);
-  document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+  document.addEventListener('fullscreenchange', fullscreenChanged);
+  document.addEventListener('webkitfullscreenchange', fullscreenChanged);
+  document.addEventListener('fullscreenerror', fullscreenFailed);
+  document.addEventListener('webkitfullscreenerror', fullscreenFailed);
   dialog.addEventListener('close', () => {
+    if (tv || fullscreenElement() === viewerFrame) exitFullscreen();
+    leaveTV();
     stopSlideshow();
+    hideNotice();
     closeEXIF();
     stage.replaceChildren();
     resetView();
@@ -454,8 +616,18 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     render(false);
   }).observe(stage);
 
+  /**
+   * Open `list[startIndex]` straight into TV mode. Call it from the user's click or key press:
+   * the fullscreen request is made synchronously, before anything is awaited.
+   */
+  function openTV(list, startIndex) {
+    open(list, startIndex);
+    if (!tv) toggleTV();
+  }
+
   return {
     open,
+    openTV,
     handleKey,
     get isOpen() { return dialog.open; },
   };
