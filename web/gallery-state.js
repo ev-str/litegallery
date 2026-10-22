@@ -1,0 +1,92 @@
+// The one owner of gallery view state. Controls persist in localStorage under the
+// keys used since v0.2; per-folder views (scroll anchor, focus target) live for the
+// tab in sessionStorage, so they survive refresh and reload but not a new tab.
+
+export const DENSITY_CHOICES = {desktop: [3, 5, 7], phone: [1, 2, 3]};
+export const DEFAULT_DENSITY = {desktop: 5, phone: 2};
+export const VIEWS_KEY = 'gallery-views';
+const MAX_VIEWS = 200;
+
+/**
+ * @typedef {'desktop'|'phone'} DeviceClass
+ * @typedef {{scrollY?: number, anchorPath?: string|null, anchorOffset?: number, focusPath?: string}} FolderView
+ * @typedef {{folder: string, path: string, index: number}} OpenedItem
+ * @typedef {Pick<Storage, 'getItem'|'setItem'>} KeyValueStorage
+ */
+
+/**
+ * @param {{path?: string, local: KeyValueStorage, session: KeyValueStorage}} options
+ */
+export function createGalleryState({path = '', local, session}) {
+  const sortKey = local.getItem('gallery-media-sort');
+  const filter = local.getItem('gallery-media-filter');
+  /** @type {Map<string, FolderView>} */
+  const views = new Map();
+  try {
+    for (const [key, view] of Object.entries(JSON.parse(session.getItem(VIEWS_KEY) || '{}'))) views.set(key, view);
+  } catch {
+    // A damaged entry only loses remembered scroll positions.
+  }
+
+  const state = {
+    /** Folder of the last successful load. */
+    path,
+    /** Folder of the newest load, successful or not; refresh repeats it. */
+    requestedPath: path,
+    /** Folder whose listing is on screen; null while loading or after an error. @type {string|null} */
+    shownPath: null,
+    sortKey: sortKey === 'name' ? 'name' : 'date',
+    filter: filter === 'image' || filter === 'video' ? filter : 'all',
+    descending: local.getItem('gallery-media-order') !== 'asc',
+    folderDescending: local.getItem('gallery-folder-order') !== 'asc',
+    /** Media item opened in the viewer; focus returns to its tile. @type {OpenedItem|null} */
+    lastOpened: null,
+
+    /** @param {DeviceClass} device */
+    columns(device) {
+      const stored = Number(local.getItem(`gallery-density-${device}`));
+      return DENSITY_CHOICES[device].includes(stored) ? stored : DEFAULT_DENSITY[device];
+    },
+    /** @param {DeviceClass} device @param {number} columns */
+    setColumns(device, columns) {
+      if (DENSITY_CHOICES[device].includes(columns)) local.setItem(`gallery-density-${device}`, String(columns));
+    },
+    /** @param {string} value */
+    setFilter(value) {
+      if (!['all', 'image', 'video'].includes(value)) return;
+      state.filter = /** @type {'all'|'image'|'video'} */ (value);
+      local.setItem('gallery-media-filter', value);
+    },
+    /** @param {string} value */
+    setSortKey(value) {
+      if (value !== 'date' && value !== 'name') return;
+      state.sortKey = value;
+      local.setItem('gallery-media-sort', value);
+    },
+    toggleDescending() {
+      state.descending = !state.descending;
+      local.setItem('gallery-media-order', state.descending ? 'desc' : 'asc');
+    },
+    toggleFolderOrder() {
+      state.folderDescending = !state.folderDescending;
+      local.setItem('gallery-folder-order', state.folderDescending ? 'desc' : 'asc');
+    },
+    /** @param {string} folder @returns {FolderView|undefined} */
+    view(folder) {
+      return views.get(folder);
+    },
+    /** Merge into a folder's view; the most recently touched folders are kept. @param {string} folder @param {FolderView} patch */
+    saveView(folder, patch) {
+      const view = {...views.get(folder), ...patch};
+      views.delete(folder);
+      views.set(folder, view);
+      while (views.size > MAX_VIEWS) views.delete(views.keys().next().value ?? '');
+      try {
+        session.setItem(VIEWS_KEY, JSON.stringify(Object.fromEntries(views)));
+      } catch {
+        // Storage may be full or disabled; the in-memory views still work.
+      }
+    },
+  };
+  return state;
+}

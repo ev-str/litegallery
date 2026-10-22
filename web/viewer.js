@@ -11,8 +11,9 @@ const SWIPE_PX = 60;
 /**
  * Full-screen photo and video viewer bound to the #viewer dialog.
  * @param {HTMLDialogElement} dialog
+ * @param {{onClose?: () => void}} [options] onClose runs after the dialog has closed.
  */
-export function createViewer(dialog) {
+export function createViewer(dialog, {onClose = () => {}} = {}) {
   const stage = dialog.querySelector('.stage');
   const caption = dialog.querySelector('.caption');
   const slideButton = dialog.querySelector('.slideshow');
@@ -226,6 +227,7 @@ export function createViewer(dialog) {
     stage.replaceChildren();
     clearTimeout(idleTimer);
     delete dialog.dataset.idle;
+    onClose();
   });
   for (const type of ['pointermove', 'pointerdown', 'focusin', 'wheel']) dialog.addEventListener(type, wake, {passive: true});
   dialog.addEventListener('pointerdown', event => { touchX = event.clientX; });

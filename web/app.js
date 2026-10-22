@@ -1,5 +1,6 @@
 import {createCollageSelection} from './collage-selection.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
+import {createGalleryState, DENSITY_CHOICES} from './gallery-state.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
 import {queueVideoDuration, queueVideoPreview} from './video-posters.js';
 import {createViewer} from './viewer.js';
@@ -19,36 +20,23 @@ const mediaFilter = document.querySelector('#mediaFilter');
 const emptyState = document.querySelector('#emptyState');
 const refreshButton = document.querySelector('#refresh');
 const densityControl = document.querySelector('#gridDensity');
+const header = document.querySelector('.topbar');
+const main = document.querySelector('main');
 
 const urlPath = () => new URLSearchParams(location.search).get('path') || '';
-let currentPath = urlPath();
-// Path of the newest load, successful or not; refresh repeats it.
-let requestedPath = currentPath;
+const state = createGalleryState({path: urlPath(), local: localStorage, session: sessionStorage});
 let directories = [];
 let allMedia = [];
 let media = [];
-let folderDescending = localStorage.getItem('gallery-folder-order') !== 'asc';
-let mediaDescending = localStorage.getItem('gallery-media-order') !== 'asc';
-let mediaSortKey = localStorage.getItem('gallery-media-sort') || 'date';
-let mediaFilterKey = localStorage.getItem('gallery-media-filter') || 'all';
-
-if (!['date', 'name'].includes(mediaSortKey)) mediaSortKey = 'date';
-if (!['all', 'image', 'video'].includes(mediaFilterKey)) mediaFilterKey = 'all';
 
 // Fixed grid density, stored separately for phones and for desktop/TV screens.
-const DENSITY_CHOICES = {desktop: [3, 5, 7], phone: [1, 2, 3]};
-const DEFAULT_DENSITY = {desktop: 5, phone: 2};
 const phoneQuery = matchMedia('(max-width: 700px)');
 const deviceClass = () => (phoneQuery.matches ? 'phone' : 'desktop');
-
-function gridColumns(device = deviceClass()) {
-  const stored = Number(localStorage.getItem(`gallery-density-${device}`));
-  return DENSITY_CHOICES[device].includes(stored) ? stored : DEFAULT_DENSITY[device];
-}
+const gridColumns = () => state.columns(deviceClass());
 
 function applyDensity() {
   const device = deviceClass();
-  const columns = gridColumns(device);
+  const columns = state.columns(device);
   document.body.dataset.gridColumns = String(columns);
   densityControl.querySelectorAll('[data-density-step]').forEach(button => {
     const value = DENSITY_CHOICES[device][Number(button.dataset.densityStep)];
@@ -181,8 +169,8 @@ function renderSkeletons() {
 }
 
 const nameCollator = new Intl.Collator('ru', {numeric: true, sensitivity: 'base'});
-const viewer = createViewer(document.querySelector('#viewer'));
-const selection = createCollageSelection({onModeChange: applyMediaView, getCurrentPath: () => currentPath});
+const viewer = createViewer(document.querySelector('#viewer'), {onClose: returnFromViewer});
+const selection = createCollageSelection({onModeChange: applyMediaView, getCurrentPath: () => state.path});
 
 function sortByName(items, descending) {
   const sorted = [...items].sort((left, right) => nameCollator.compare(left.name, right.name));
@@ -191,13 +179,13 @@ function sortByName(items, descending) {
 
 function sortMedia(items) {
   const sorted = [...items].sort((left, right) => {
-    if (mediaSortKey === 'date') {
+    if (state.sortKey === 'date') {
       const byDate = (left.sortTime || 0) - (right.sortTime || 0);
       if (byDate !== 0) return byDate;
     }
     return nameCollator.compare(left.name, right.name);
   });
-  return mediaDescending ? sorted.reverse() : sorted;
+  return state.descending ? sorted.reverse() : sorted;
 }
 
 function updateSortButton(button, descending) {
@@ -206,26 +194,28 @@ function updateSortButton(button, descending) {
 }
 
 function updateMediaControls() {
-  mediaSort.value = mediaSortKey;
+  mediaSort.value = state.sortKey;
   mediaFilter.querySelectorAll('[data-filter]').forEach(button => {
-    button.setAttribute('aria-pressed', String(button.dataset.filter === mediaFilterKey));
+    button.setAttribute('aria-pressed', String(button.dataset.filter === state.filter));
   });
-  mediaDirection.innerHTML = iconMarkup(mediaDescending ? 'arrow-down' : 'arrow-up');
-  const dateDirection = mediaDescending ? 'Сначала новые' : 'Сначала старые';
-  const nameDirection = mediaDescending ? 'От Z к A' : 'От A к Z';
-  mediaDirection.title = mediaSortKey === 'date' ? dateDirection : nameDirection;
+  mediaDirection.innerHTML = iconMarkup(state.descending ? 'arrow-down' : 'arrow-up');
+  const dateDirection = state.descending ? 'Сначала новые' : 'Сначала старые';
+  const nameDirection = state.descending ? 'От Z к A' : 'От A к Z';
+  mediaDirection.title = state.sortKey === 'date' ? dateDirection : nameDirection;
   mediaDirection.setAttribute('aria-label', `Изменить направление сортировки. Сейчас: ${mediaDirection.title}`);
 }
 
 function applyMediaView() {
-  const filtered = allMedia.filter(item => mediaFilterKey === 'all' || item.kind === mediaFilterKey);
+  const filtered = allMedia.filter(item => state.filter === 'all' || item.kind === state.filter);
   media = sortMedia(filtered);
   renderMedia(media);
 }
 
 async function load(path, push = true) {
   const token = ++loadToken;
-  requestedPath = path;
+  rememberView();
+  state.shownPath = null;
+  state.requestedPath = path;
   loadController?.abort();
   loadController = new AbortController();
   const {signal} = loadController;
@@ -247,16 +237,19 @@ async function load(path, push = true) {
     if (!response.ok) throw new Error('Каталог недоступен');
     const data = await response.json();
     if (token !== loadToken) return;
-    currentPath = data.path === '.' ? '' : data.path;
-    document.title = currentPath ? `${data.title} — ${currentPath}` : data.title;
+    state.path = state.requestedPath = data.path === '.' ? '' : data.path;
+    document.title = state.path ? `${data.title} — ${state.path}` : data.title;
     document.querySelector('#brand').textContent = data.title;
-    if (push) history.pushState({path: currentPath}, '', currentPath ? `?path=${encodeURIComponent(currentPath)}` : '/');
+    // Repeating the shown folder (refresh, its breadcrumb) adds no history entry.
+    if (push && urlPath() !== state.path) history.pushState({path: state.path}, '', state.path ? `?path=${encodeURIComponent(state.path)}` : '/');
     renderBreadcrumbs();
     clearTimeout(skeletonTimer);
     delete mediaSection.dataset.loading;
     render(data.entries);
     emptyState.hidden = data.entries.length > 0;
     statusBox.textContent = data.entries.length ? formatCount(data.entries.length, ['элемент', 'элемента', 'элементов']) : '';
+    state.shownPath = state.path;
+    restoreView(state.path);
   } catch (error) {
     if (token !== loadToken) return;
     clearTimeout(skeletonTimer);
@@ -276,7 +269,7 @@ async function load(path, push = true) {
 function render(entries) {
   directories = entries.filter(item => item.kind === 'directory');
   allMedia = entries.filter(item => item.kind !== 'directory');
-  renderFolders(sortByName(directories, folderDescending));
+  renderFolders(sortByName(directories, state.folderDescending));
   applyMediaView();
 }
 
@@ -284,7 +277,7 @@ function renderFolders(items) {
   clearGrid(foldersGrid);
   foldersSection.hidden = items.length === 0;
   folderCount.textContent = formatCount(items.length, ['папка', 'папки', 'папок']);
-  updateSortButton(folderSort, folderDescending);
+  updateSortButton(folderSort, state.folderDescending);
   const fragment = document.createDocumentFragment();
   for (const [index, item] of items.entries()) {
     const card = document.createElement('button');
@@ -311,7 +304,10 @@ function renderFolders(items) {
       meta.textContent = counts ? formatFolderCounts(counts) : 'Открыть альбом';
     }));
     card.append(fallback, cover, overlay);
-    card.addEventListener('click', () => load(item.path));
+    card.addEventListener('click', () => {
+      state.saveView(state.path, {focusPath: item.path});
+      load(item.path);
+    });
     fragment.append(card);
   }
   foldersGrid.append(fragment);
@@ -379,7 +375,10 @@ function renderMedia(items) {
     card.append(overlay);
     card.addEventListener('click', () => {
       if (selection.handleCardClick(item, card)) return;
-      viewer.open(media, media.findIndex(entry => entry.path === item.path));
+      const index = media.findIndex(entry => entry.path === item.path);
+      state.lastOpened = {folder: state.path, path: item.path, index};
+      state.saveView(state.path, {focusPath: item.path});
+      viewer.open(media, index);
     });
     fragment.append(card);
   }
@@ -393,7 +392,7 @@ function renderBreadcrumbs() {
   root.onclick = () => load('');
   crumbs.append(root);
   let path = '';
-  for (const part of currentPath.split('/').filter(Boolean)) {
+  for (const part of state.path.split('/').filter(Boolean)) {
     crumbs.append(document.createTextNode(' / '));
     path = path ? `${path}/${part}` : part;
     const target = path;
@@ -404,6 +403,87 @@ function renderBreadcrumbs() {
   }
   // Keep the current folder visible when the path is wider than the header.
   crumbs.scrollLeft = crumbs.scrollWidth;
+}
+
+function galleryItems() {
+  return [...foldersGrid.children, ...mediaGrid.children].filter(element => element.classList.contains('gallery-item'));
+}
+
+function findItem(path) {
+  return path ? main.querySelector(`.gallery-item[data-path="${CSS.escape(path)}"]`) : null;
+}
+
+// First tile not hidden by the sticky header; tiles are in layout order, so bisect.
+function firstVisibleItem() {
+  const items = galleryItems();
+  const top = header.getBoundingClientRect().bottom;
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (items[middle].getBoundingClientRect().bottom > top) high = middle;
+    else low = middle + 1;
+  }
+  return items[low];
+}
+
+// Scroll is remembered by its anchor tile, so a density change or a file added above
+// still brings back the same tiles; the raw offset is the fallback.
+function rememberView() {
+  if (state.shownPath === null) return;
+  const anchor = scrollY > 0 ? firstVisibleItem() : undefined;
+  state.saveView(state.shownPath, {
+    scrollY: Math.round(scrollY),
+    anchorPath: anchor?.dataset.path ?? null,
+    anchorOffset: anchor ? Math.round(anchor.getBoundingClientRect().top) : 0,
+  });
+}
+
+// Called right after a render: scrollTo forces the layout of the new grid.
+function restoreView(path) {
+  const view = state.view(path);
+  const anchor = findItem(view?.anchorPath);
+  const top = anchor ? scrollY + anchor.getBoundingClientRect().top - view.anchorOffset : view?.scrollY ?? 0;
+  scrollTo({top, behavior: 'instant'});
+  // The grids were rebuilt, so focus that was on a tile is lost; other focus stays.
+  if (document.activeElement === document.body) findItem(view?.focusPath)?.focus({preventScroll: true});
+}
+
+// Re-render without a jump: the anchor keeps its place on screen.
+function keepInPlace(anchor, update) {
+  const before = anchor?.getBoundingClientRect().top;
+  update();
+  if (anchor?.isConnected) scrollBy({top: anchor.getBoundingClientRect().top - before, behavior: 'instant'});
+}
+
+function flashLastOpened(tile) {
+  tile.classList.remove('is-last-opened');
+  void tile.offsetWidth;
+  tile.classList.add('is-last-opened');
+  const done = event => {
+    if (event.target !== tile || !event.animationName.startsWith('gallery-last-opened')) return;
+    tile.classList.remove('is-last-opened');
+    tile.removeEventListener('animationend', done);
+  };
+  tile.addEventListener('animationend', done);
+}
+
+// After the viewer: focus the tile it was opened from, else its nearest neighbour,
+// else the refresh button in the sticky header.
+function returnFromViewer() {
+  const opened = state.lastOpened;
+  if (!opened) return;
+  const sameFolder = opened.folder === state.shownPath;
+  const tile = sameFolder ? findItem(opened.path) : null;
+  const cards = mediaGrid.querySelectorAll('.media-card');
+  const target = tile || (sameFolder ? cards[Math.min(opened.index, cards.length - 1)] : null) || galleryItems()[0] || refreshButton;
+  target.focus({preventScroll: true});
+  // Pointer users get no :focus-visible after a programmatic focus; show the ring anyway.
+  target.classList.add('is-return-focus');
+  target.addEventListener('blur', () => target.classList.remove('is-return-focus'), {once: true});
+  if (target === refreshButton) return;
+  target.scrollIntoView({block: 'nearest', inline: 'nearest'});
+  if (target === tile) flashLastOpened(tile);
 }
 
 // Arrow keys move focus to the nearest gallery card in that direction (TV remotes).
@@ -434,42 +514,53 @@ function focusInDirection(key) {
   return Boolean(best);
 }
 
-folderSort.addEventListener('click', () => {
-  folderDescending = !folderDescending;
-  localStorage.setItem('gallery-folder-order', folderDescending ? 'desc' : 'asc');
-  renderFolders(sortByName(directories, folderDescending));
-});
+// Sorting and filtering keep their section heading in place; density keeps the top tile.
+const foldersHeading = foldersSection.querySelector('.section-heading');
+const mediaHeading = mediaSection.querySelector('.section-heading');
 
-mediaSort.addEventListener('change', () => {
-  mediaSortKey = mediaSort.value;
-  localStorage.setItem('gallery-media-sort', mediaSortKey);
-  applyMediaView();
-});
+folderSort.addEventListener('click', () => keepInPlace(foldersHeading, () => {
+  state.toggleFolderOrder();
+  renderFolders(sortByName(directories, state.folderDescending));
+}));
 
-mediaDirection.addEventListener('click', () => {
-  mediaDescending = !mediaDescending;
-  localStorage.setItem('gallery-media-order', mediaDescending ? 'desc' : 'asc');
+mediaSort.addEventListener('change', () => keepInPlace(mediaHeading, () => {
+  state.setSortKey(mediaSort.value);
   applyMediaView();
-});
+}));
+
+mediaDirection.addEventListener('click', () => keepInPlace(mediaHeading, () => {
+  state.toggleDescending();
+  applyMediaView();
+}));
 
 mediaFilter.addEventListener('click', event => {
   const button = event.target.closest('[data-filter]');
   if (!button) return;
-  mediaFilterKey = button.dataset.filter;
-  localStorage.setItem('gallery-media-filter', mediaFilterKey);
-  applyMediaView();
+  keepInPlace(mediaHeading, () => {
+    state.setFilter(button.dataset.filter);
+    applyMediaView();
+  });
 });
 
 densityControl.addEventListener('click', event => {
   const button = event.target.closest('[data-columns]');
   if (!button) return;
-  localStorage.setItem(`gallery-density-${deviceClass()}`, button.dataset.columns);
-  applyDensity();
+  keepInPlace(firstVisibleItem(), () => {
+    state.setColumns(deviceClass(), Number(button.dataset.columns));
+    applyDensity();
+  });
 });
-phoneQuery.addEventListener('change', applyDensity);
+phoneQuery.addEventListener('change', () => keepInPlace(firstVisibleItem(), applyDensity));
 
-// An interrupted navigation or a failed load has not updated the address yet.
-refreshButton.onclick = () => load(requestedPath, urlPath() !== requestedPath);
+main.addEventListener('focusin', event => {
+  const item = event.target.closest('.gallery-item');
+  if (item && state.shownPath !== null) state.saveView(state.shownPath, {focusPath: item.dataset.path});
+});
+addEventListener('pagehide', rememberView);
+history.scrollRestoration = 'manual';
+
+// After an interrupted navigation or a failed load the address catches up.
+refreshButton.onclick = () => load(state.requestedPath);
 addEventListener('popstate', event => load(event.state?.path || urlPath(), false));
 addEventListener('keydown', event => {
   if (viewer.isOpen) {
@@ -477,11 +568,11 @@ addEventListener('keydown', event => {
     return;
   }
   if (focusInDirection(event.key)) event.preventDefault();
-  if ((event.key === 'Escape' || event.key === 'Backspace') && currentPath) {
+  if ((event.key === 'Escape' || event.key === 'Backspace') && state.path) {
     event.preventDefault();
-    load(currentPath.split('/').slice(0, -1).join('/'));
+    load(state.path.split('/').slice(0, -1).join('/'));
   }
 });
 
 applyDensity();
-load(currentPath, false);
+load(state.path, false);

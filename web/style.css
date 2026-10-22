@@ -113,7 +113,8 @@ nav button, .icon-button {
   font: inherit;
 }
 
-nav button:hover, nav button:focus-visible, .icon-button:hover, .icon-button:focus-visible {
+nav button:hover, nav button:focus-visible, .icon-button:hover, .icon-button:focus-visible,
+.icon-button.is-return-focus:focus {
   color: var(--ink);
   background: rgba(255, 255, 255, .68);
   outline: 3px solid rgba(187, 118, 84, .22);
@@ -445,9 +446,27 @@ main {
   font-weight: 800;
 }
 
-.folder-card:focus-visible, .media-card:focus-visible {
+.folder-card:focus-visible, .media-card:focus-visible,
+.gallery-item.is-return-focus:focus {
   outline: 4px solid var(--focus);
   outline-offset: 4px;
+}
+
+.media-card.is-return-focus:focus .media-details { max-height: 1.5em; margin-top: 1px; opacity: 1; }
+
+/* Keeps tiles clear of the sticky header when focus scrolls them into view. */
+.gallery-item { scroll-margin: calc(var(--header-height) + 12px) 0 12px; }
+
+/* Brief glow on the tile the viewer was opened from; the focus ring stays after it. */
+.gallery-item.is-last-opened { animation: gallery-last-opened 1.6s ease-out; }
+
+@keyframes gallery-last-opened {
+  0%, 35% { box-shadow: 0 0 0 4px var(--paper), 0 0 0 10px var(--accent); }
+  100% { box-shadow: 0 0 0 4px transparent, 0 0 0 10px transparent; }
+}
+
+@keyframes gallery-last-opened-still {
+  0%, 99% { box-shadow: 0 0 0 4px var(--paper), 0 0 0 10px var(--accent); }
 }
 
 #viewer {
@@ -633,10 +652,11 @@ main {
 
 @media (min-width: 1500px) {
   :root { --grid-gap: 20px; }
-  .folder-card:focus-visible, .media-card:focus-visible { outline-width: 6px; }
+  .folder-card:focus-visible, .media-card:focus-visible, .gallery-item.is-return-focus:focus { outline-width: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
   .media-skeleton, .media-card.is-loading, .icon-button.is-busy .icon { animation: none; }
+  .gallery-item.is-last-opened { animation: gallery-last-opened-still 1.2s steps(1, end); }
 }
