@@ -489,3 +489,24 @@ func TestRecursiveListStopsWhenContextIsCancelled(t *testing.T) {
 		t.Fatalf("cancelled request produced a listing: %d %q", response.Code, response.Body.String())
 	}
 }
+
+func TestRecursiveListRejectsSubtreeAboveLimit(t *testing.T) {
+	s, root := testServer(t)
+	for _, name := range []string{"a.jpg", "b.jpg", "sub/c.jpg"} {
+		writeFixture(t, root, filepath.Join("album", name))
+	}
+	defer func(limit int) { maxRecursiveEntries = limit }(maxRecursiveEntries)
+
+	maxRecursiveEntries = 3
+	if response := getList(t, s, "album", "1"); response.Code != http.StatusOK {
+		t.Fatalf("at the limit: status = %d, body = %q", response.Code, response.Body.String())
+	}
+	maxRecursiveEntries = 2
+	response := getList(t, s, "album", "1")
+	if response.Code != http.StatusRequestEntityTooLarge || strings.Contains(response.Header().Get("Content-Type"), "json") {
+		t.Fatalf("above the limit: status = %d, body = %q", response.Code, response.Body.String())
+	}
+	if response := getList(t, s, "album", "0"); response.Code != http.StatusOK {
+		t.Fatalf("plain listing: status = %d", response.Code)
+	}
+}

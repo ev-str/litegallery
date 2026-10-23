@@ -1,6 +1,7 @@
 // @ts-check
 import {apiURL, formatCount} from './format.js';
 import {iconMarkup} from './icons.js';
+import {nearestInDirection} from './media-window.js';
 
 /**
  * Memories surface. `/api/memories` is the only source of events, their order,
@@ -355,21 +356,7 @@ export function createMemories({panel, entry, openViewer, load = defaultLoad}) {
 
   /** Arrow keys move between cards by position, so TV remotes can walk the grid. @param {Element} from @param {string} key */
   function neighbour(from, key) {
-    const direction = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[key];
-    if (!direction || !from.matches('[data-memory-action="open"]')) return null;
-    const origin = from.getBoundingClientRect();
-    let best = /** @type {HTMLElement | null} */ (null);
-    let bestScore = Infinity;
-    for (const candidate of list.querySelectorAll('[data-memory-action="open"]')) {
-      if (candidate === from) continue;
-      const rect = candidate.getBoundingClientRect();
-      const dx = rect.left + rect.width / 2 - (origin.left + origin.width / 2);
-      const dy = rect.top + rect.height / 2 - (origin.top + origin.height / 2);
-      if (dx * direction[0] + dy * direction[1] <= 1) continue;
-      const score = Math.abs(direction[0] ? dx : dy) + Math.abs(direction[0] ? dy : dx) * 2.5;
-      if (score < bestScore) [best, bestScore] = [/** @type {HTMLElement} */ (candidate), score];
-    }
-    return best;
+    return from.matches('[data-memory-action="open"]') ? nearestInDirection(from, list.querySelectorAll('[data-memory-action="open"]'), key) : null;
   }
 
   render();

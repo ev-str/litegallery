@@ -1,11 +1,9 @@
 import {test, expect} from '@playwright/test';
-import {enterSelectionMode} from './helpers.mjs';
+import {clickHeaderControl, directory, enterSelectionMode, listing, mockListings, scrollTop, stubMedia} from './helpers.mjs';
 
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const BASE_TIME = 1_760_000_000;
 const RAW = '<b>Raw</b>';
 
-const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
 const file = (path, hour, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 1000 + hour, modTime: '2026-01-15T12:00:00Z', sortTime: BASE_TIME + hour * 3600});
 
 // Trip holds duplicate names in different subfolders, a video, and enough photos to scroll.
@@ -26,6 +24,7 @@ const LISTINGS = {
   Empty: [directory('Empty/Sub')],
   'Empty?recursive': [],
   Broken: [file('Broken/one.jpg', 1)],
+  Huge: [file('Huge/one.jpg', 1)],
 };
 
 /**
@@ -33,37 +32,15 @@ const LISTINGS = {
  * recorded as `path` or `path?recursive`; requests matching `hold` wait until released.
  */
 async function mockLibrary(page) {
-  /** @type {{key: string, release: () => Promise<void>}[]} */
-  const held = [];
-  const library = {requests: /** @type {string[]} */ ([]), held, hold: (/** @type {string} */ key) => false};
-  await page.route(url => url.pathname === '/api/list', route => {
-    const params = new URL(route.request().url()).searchParams;
-    const path = params.get('path') ?? '';
-    const key = params.has('recursive') ? `${path}?recursive` : path;
-    library.requests.push(key);
-    const fulfill = () => {
-      if (key === 'Broken?recursive') return route.fulfill({status: 500, body: 'boom'}).catch(() => {});
-      return route.fulfill({json: {path: path || '.', title: 'E2E Gallery', entries: LISTINGS[key] ?? []}}).catch(() => {});
-    };
-    if (library.hold(key)) {
-      held.push({key, release: fulfill});
-      return undefined;
-    }
-    return fulfill();
-  });
-  await page.route(url => ['/api/thumb', '/api/video-poster', '/api/cover', '/api/media', '/api/image-info'].includes(url.pathname), route => {
-    if (requestURL(route).pathname === '/api/image-info') return route.fulfill({json: {width: 640, height: 900}});
-    return route.fulfill({contentType: 'image/png', body: ONE_PIXEL_PNG});
-  });
+  const library = await mockListings(page, (key, path) => (key === 'Broken?recursive' ? {status: 500, body: 'boom'} : key === 'Huge?recursive' ? {status: 413, body: 'too many'} : listing(path, LISTINGS[key] ?? [])));
+  await stubMedia(page);
   return library;
 }
 
-const requestURL = route => new URL(route.request().url());
 const toggle = page => page.locator('#recursiveToggle');
 const tiles = page => page.locator('#mediaGrid .media-card');
 const tile = (page, path) => page.locator(`#mediaGrid .media-card[data-path="${path}"]`);
 const tilePaths = page => tiles(page).evaluateAll(cards => cards.map(card => card.getAttribute('data-path')));
-const scrollTop = page => page.evaluate(() => Math.round(scrollY));
 const collator = new Intl.Collator('ru', {numeric: true, sensitivity: 'base'});
 
 async function openTrip(page) {
@@ -150,7 +127,7 @@ test('filter, sort, direction, and density survive switching the mode', async ({
   await page.locator('#mediaFilter [data-filter="image"]').click();
   await page.locator('#mediaSort').selectOption('name');
   await page.locator('#mediaDirection').click();
-  await page.locator('#gridDensity [data-density-step="0"]').click();
+  await clickHeaderControl(page, '#gridDensity [data-density-step="0"]');
   const controls = () => page.evaluate(() => ({
     filter: document.querySelector('#mediaFilter [aria-pressed="true"]')?.getAttribute('data-filter'),
     sort: /** @type {HTMLSelectElement} */ (document.querySelector('#mediaSort')).value,
@@ -189,7 +166,7 @@ test('refresh and reload keep the recursive mode, scroll, and focus', async ({pa
 
   const tripRequests = () => library.requests.filter(key => key.startsWith('Trip'));
   library.requests.length = 0;
-  await page.locator('#refresh').click();
+  await clickHeaderControl(page, '#refresh');
   await expect.poll(tripRequests).toEqual(['Trip?recursive']);
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
   await expect(tiles(page)).toHaveCount(TRIP_FILES.length);
@@ -335,10 +312,22 @@ test('an empty subtree and a failed recursive listing leave the page usable', {t
   await expect(page.locator('#status')).toHaveText('Каталог недоступен');
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
   await expect(page.locator('#mediaSection')).toBeHidden();
-  for (const control of ['#recursiveToggle', '#refresh', '#collageMode', '#gridDensity', '#breadcrumbs']) await expect(page.locator(control)).toBeVisible();
+  const header = await page.locator('#topbarMore').isVisible() ? ['#topbarMore'] : ['#refresh', '#gridDensity'];
+  for (const control of ['#recursiveToggle', '#collageMode', '#breadcrumbs', ...header]) await expect(page.locator(control)).toBeVisible();
   await expect(toggle(page)).toBeFocused();
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(tiles(page)).toHaveCount(1);
   await expect(page.locator('#status')).toHaveText('1 элемент');
+});
+
+test('a subtree above the server limit says so instead of a generic error', async ({page}) => {
+  await mockLibrary(page);
+  await page.goto('/?path=Huge');
+  await expect(tiles(page)).toHaveCount(1);
+  await toggle(page).click();
+  await expect(page.locator('#status')).toHaveText('Слишком много файлов, чтобы показать их вместе с подпапками');
+  await expect(page.locator('#mediaSection')).toBeHidden();
+  await toggle(page).click();
+  await expect(tiles(page)).toHaveCount(1);
 });

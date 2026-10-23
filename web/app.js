@@ -8,7 +8,7 @@ import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPa
 import {iconLabelMarkup, iconMarkup} from './icons.js';
 import {createRefreshLoop} from './live-refresh.js';
 import {createLoadQueue} from './load-queue.js';
-import {createMediaWindow} from './media-window.js';
+import {createMediaWindow, nearestInDirection} from './media-window.js';
 import {createSearch, relativeFolder, relativePath} from './search.js';
 import {createMemories} from './memories.js';
 import {pauseVideoWork, queueVideoDuration, queueVideoPreview, wakeVideoWork} from './video-posters.js';
@@ -323,7 +323,7 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
   skeletonTimer = setTimeout(renderSkeletons, 150);
   try {
     const response = await fetch(listingURL(path, state.recursive), {signal});
-    if (!response.ok) throw new Error('Каталог недоступен');
+    if (!response.ok) throw new Error(response.status === 413 ? 'Слишком много файлов, чтобы показать их вместе с подпапками' : 'Каталог недоступен');
     const data = await response.json();
     if (token !== loadToken) return;
     state.path = state.requestedPath = data.path === '.' ? '' : data.path;
@@ -409,17 +409,15 @@ const liveRefresh = createRefreshLoop({check: checkForChanges, canCheck, isHidde
 let subfolders = new Map();
 
 function subfolderContext(items, folder) {
-  const prefix = folder ? `${folder}/` : '';
   const names = new Map();
   for (const item of items) {
     const key = item.name.toLowerCase();
     names.set(key, (names.get(key) ?? 0) + 1);
   }
-  return new Map(items.map(item => {
-    const relative = item.path.startsWith(prefix) ? item.path.slice(prefix.length) : item.path;
-    const parent = relative.slice(0, -item.name.length).replace(/\/$/, '');
-    return [item.path, {relative, folder: names.get(item.name.toLowerCase()) > 1 ? parent || 'Эта папка' : null}];
-  }));
+  return new Map(items.map(item => [item.path, {
+    relative: relativePath(item, folder),
+    folder: names.get(item.name.toLowerCase()) > 1 ? relativeFolder(item, folder) || 'Эта папка' : null,
+  }]));
 }
 
 function updateRecursiveToggle() {
@@ -673,12 +671,12 @@ function returnFromViewer() {
   const list = fromSearch ? search.results : media;
   const tile = sameFolder ? (fromSearch ? search.tileFor(opened.path) : tileFor(opened.path)) : null;
   const neighbour = sameFolder && list.length ? (fromSearch ? search : mediaWindow).revealIndex(Math.min(opened.index, list.length - 1)) : null;
-  const target = tile || neighbour || (fromSearch ? searchInput : galleryItems()[0] || refreshButton);
+  const target = tile || neighbour || (fromSearch ? searchInput : galleryItems()[0] || headerFocusTarget());
   target.focus({preventScroll: true});
   // Pointer users get no :focus-visible after a programmatic focus; show the ring anyway.
   target.classList.add('is-return-focus');
   target.addEventListener('blur', () => target.classList.remove('is-return-focus'), {once: true});
-  if (target === refreshButton || target === searchInput) return;
+  if (target === refreshButton || target === topbarMore || target === searchInput) return;
   target.scrollIntoView({block: 'nearest', inline: 'nearest'});
   if (target === tile) flashLastOpened(tile);
 }
@@ -697,25 +695,7 @@ function focusInDirection(key) {
   }
   // The search grid holds media cards only: its edge is the end of the move.
   if (inSearch) return false;
-  const cards = [...document.querySelectorAll('.gallery-item:not([hidden])')];
-  const from = active.getBoundingClientRect();
-  const fx = from.left + from.width / 2;
-  const fy = from.top + from.height / 2;
-  const direction = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[key];
-  if (!direction) return false;
-  let best = null;
-  let bestScore = Infinity;
-  for (const card of cards) {
-    if (card === active) continue;
-    const rect = card.getBoundingClientRect();
-    const dx = rect.left + rect.width / 2 - fx;
-    const dy = rect.top + rect.height / 2 - fy;
-    if (dx * direction[0] + dy * direction[1] <= 0) continue;
-    const primary = Math.abs(direction[0] ? dx : dy);
-    const secondary = Math.abs(direction[0] ? dy : dx);
-    const score = primary + secondary * 2.5;
-    if (score < bestScore) { best = card; bestScore = score; }
-  }
+  const best = nearestInDirection(active, document.querySelectorAll('.gallery-item:not([hidden])'), key);
   best?.focus({preventScroll: true});
   best?.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
   return Boolean(best);
@@ -799,7 +779,15 @@ addEventListener('keydown', event => {
     return;
   }
   if (focusInDirection(event.key)) event.preventDefault();
-  if ((event.key === 'Escape' || event.key === 'Backspace') && state.path && surfaces.current === 'gallery') {
+  if (event.key !== 'Escape' && event.key !== 'Backspace') return;
+  // Form fields keep these keys. A select has no use for Backspace, which WebKit would take for Back.
+  const field = /** @type {Element} */ (event.target).closest?.('input, textarea, select, [contenteditable]');
+  if (field) {
+    if (event.key === 'Backspace' && field.matches('select')) event.preventDefault();
+    return;
+  }
+  // An open dialog (the collage editor and its prompts) blocks folder navigation.
+  if (state.path && surfaces.current === 'gallery' && !document.querySelector('dialog[open]')) {
     event.preventDefault();
     load(state.path.split('/').slice(0, -1).join('/'));
   }
@@ -819,6 +807,7 @@ function enterGallery() {
   pauseGalleryWork(false);
   syncTvButton();
   restoreGallery();
+  liveRefresh.resume();
 }
 
 // Scroll by the remembered anchor tile, then focus the tile the user left.
@@ -865,6 +854,32 @@ const galleryStatus = createGalleryStatus({panel: document.querySelector('#statu
 surfaces.register('status', {panel: galleryStatus.panel, entry: document.querySelector('#statusMode'), enter: galleryStatus.enter, leave: galleryStatus.leave});
 // Section entries sit in the text navigation and as separate header icons.
 routeSurfaceEntries(document.querySelector('.topbar-actions'), surfaces);
+
+// On the phone the gallery controls sit in the ⋯ menu: a choice there, Escape, or a tap outside closes it.
+const topbarMore = document.querySelector('#topbarMore');
+const topbarMenu = document.querySelector('#topbarMenu');
+function setTopbarMenu(open) {
+  topbarMenu.classList.toggle('is-open', open);
+  topbarMore.setAttribute('aria-expanded', String(open));
+}
+topbarMore.addEventListener('click', () => setTopbarMenu(!topbarMenu.classList.contains('is-open')));
+topbarMenu.addEventListener('click', event => {
+  if (!topbarMenu.classList.contains('is-open') || !event.target.closest('button') || event.target.closest('#gridDensity')) return;
+  const hadFocus = topbarMenu.contains(document.activeElement);
+  setTopbarMenu(false);
+  if (hadFocus) topbarMore.focus({preventScroll: true});
+});
+// Refresh is the last focus target of an empty page; on the phone it is folded into the menu.
+const headerFocusTarget = () => (refreshButton.offsetParent ? refreshButton : topbarMore);
+topbarMore.parentElement.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !topbarMenu.classList.contains('is-open')) return;
+  event.stopPropagation();
+  setTopbarMenu(false);
+  topbarMore.focus();
+});
+document.addEventListener('pointerdown', event => {
+  if (!event.target.closest?.('#topbarMore, #topbarMenu')) setTopbarMenu(false);
+});
 
 const collageLanding = createCollageLanding({
   createCard: document.querySelector('#collageCreate'),

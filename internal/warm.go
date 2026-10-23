@@ -436,18 +436,5 @@ func validCacheJPEG(cache, path string) bool {
 }
 
 func writeWarmStamp(destination string) error {
-	tmp, err := os.CreateTemp(filepath.Dir(destination), ".warm-success-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err := fmt.Fprintln(tmp, time.Now().Format(time.RFC3339)); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, destination)
+	return writeFileAtomic(destination, []byte(time.Now().Format(time.RFC3339)+"\n"))
 }

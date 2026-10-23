@@ -130,6 +130,28 @@ func statusTime(t time.Time) time.Time {
 	return t.UTC().Truncate(time.Second)
 }
 
+func (run *WarmRunStatus) setCounters(stats WarmStats) {
+	run.Scanned = stats.Media
+	run.Processed = stats.Processed
+	run.Generated = stats.Generated
+	run.Skipped = stats.Skipped
+	run.Errors = stats.Errors
+}
+
+func writeJSONAtomic(destination string, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return writeFileAtomic(destination, data)
+}
+
+// readJSONFile reports false for a missing or unreadable file and for invalid JSON.
+func readJSONFile(path string, value any) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && json.Unmarshal(data, value) == nil
+}
+
 func writeFileAtomic(destination string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return err
@@ -223,11 +245,7 @@ func (r *warmStatusRecorder) writeLocked() error {
 		progress := math.Round(math.Min(1, float64(run.Processed)/float64(*run.Total))*10000) / 10000
 		run.Progress = &progress
 	}
-	data, err := json.Marshal(r.file)
-	if err != nil {
-		return err
-	}
-	if err := writeFileAtomic(r.path, data); err != nil {
+	if err := writeJSONAtomic(r.path, r.file); err != nil {
 		return err
 	}
 	r.lastWrite = time.Now()
@@ -242,11 +260,7 @@ func (r *warmStatusRecorder) update(phase string, stats WarmStats, total int) {
 	}
 	run := &r.file.Run
 	run.Phase = phase
-	run.Scanned = stats.Media
-	run.Processed = stats.Processed
-	run.Generated = stats.Generated
-	run.Skipped = stats.Skipped
-	run.Errors = stats.Errors
+	run.setCounters(stats)
 	if total >= 0 {
 		run.Total = &total
 	}
@@ -291,11 +305,7 @@ func (r *warmStatusRecorder) finish(state string, stats WarmStats, cache *CacheS
 	run := &r.file.Run
 	run.State = state
 	run.Phase = ""
-	run.Scanned = stats.Media
-	run.Processed = stats.Processed
-	run.Generated = stats.Generated
-	run.Skipped = stats.Skipped
-	run.Errors = stats.Errors
+	run.setCounters(stats)
 	finished := statusTime(time.Now())
 	run.FinishedAt = &finished
 	if cache != nil {
@@ -382,12 +392,8 @@ func cacheSizeBytes(cache string) int64 {
 }
 
 func (s *Server) readWarmStatusFile() (warmStatusFile, bool) {
-	data, err := os.ReadFile(s.warmStatusPath())
-	if err != nil {
-		return warmStatusFile{}, false
-	}
 	var file warmStatusFile
-	if json.Unmarshal(data, &file) != nil || file.Version != warmStatusVersion {
+	if !readJSONFile(s.warmStatusPath(), &file) || file.Version != warmStatusVersion {
 		return warmStatusFile{}, false
 	}
 	run := file.Run
@@ -451,12 +457,8 @@ func fresh(now, updated time.Time) bool {
 }
 
 func (s *Server) readMemoriesStatusFile() (memoriesStatusFile, bool) {
-	data, err := os.ReadFile(s.memoriesStatusPath())
-	if err != nil {
-		return memoriesStatusFile{}, false
-	}
 	var file memoriesStatusFile
-	if json.Unmarshal(data, &file) != nil || file.Version != memoriesStatusVersion || file.UpdatedAt == nil {
+	if !readJSONFile(s.memoriesStatusPath(), &file) || file.Version != memoriesStatusVersion || file.UpdatedAt == nil {
 		return memoriesStatusFile{}, false
 	}
 	for _, counter := range []*int{file.Periods, file.Memories, file.Shown, file.Errors} {

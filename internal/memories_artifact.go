@@ -1,11 +1,9 @@
 package internal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"time"
 )
@@ -24,22 +22,14 @@ func (s *Server) memoriesPath() string {
 }
 
 func (s *Server) writeMemoriesArtifact(artifact memoriesArtifact) error {
-	data, err := json.Marshal(artifact)
-	if err != nil {
-		return err
-	}
-	return writeFileAtomic(s.memoriesPath(), data)
+	return writeJSONAtomic(s.memoriesPath(), artifact)
 }
 
 // readMemoriesArtifact treats a missing, corrupt, unknown-version, or
 // inconsistent artifact as unavailable.
 func (s *Server) readMemoriesArtifact() (memoriesArtifact, bool) {
-	data, err := os.ReadFile(s.memoriesPath())
-	if err != nil {
-		return memoriesArtifact{}, false
-	}
 	var artifact memoriesArtifact
-	if json.Unmarshal(data, &artifact) != nil || !validMemoriesArtifact(artifact) {
+	if !readJSONFile(s.memoriesPath(), &artifact) || !validMemoriesArtifact(artifact) {
 		return memoriesArtifact{}, false
 	}
 	return artifact, true
@@ -83,11 +73,7 @@ func parseMemoryDate(value string) (civilDay, bool) {
 }
 
 func (s *Server) writeMemoriesStatus(status MemoriesStatus) error {
-	data, err := json.Marshal(memoriesStatusFile{Version: memoriesStatusVersion, MemoriesStatus: status})
-	if err != nil {
-		return err
-	}
-	return writeFileAtomic(s.memoriesStatusPath(), data)
+	return writeJSONAtomic(s.memoriesStatusPath(), memoriesStatusFile{Version: memoriesStatusVersion, MemoriesStatus: status})
 }
 
 // refreshMemories rebuilds the memories artifact from a freshly written date

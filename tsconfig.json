@@ -27,6 +27,10 @@
     "web/date-groups.js",
     "web/media-window.js",
     "web/search.js",
-    "web/slideshow.js"
+    "web/slideshow.js",
+    "web/gallery-state.js",
+    "web/icons.js",
+    "web/video-posters.js",
+    "web/viewer-transform.js"
   ]
 }

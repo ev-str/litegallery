@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {STATUS_POLL_MS} from '../../web/gallery-status.js';
-import {isDesktopBrowserProject, openAlbum} from './helpers.mjs';
+import {clickHeaderControl, galleryView, isDesktopBrowserProject, openAlbum} from './helpers.mjs';
 
 // Europe/Moscow (playwright.config) is UTC+3: 07:00Z reads as 10:00.
 const NOW = new Date('2026-10-23T10:30:00Z');
@@ -34,7 +34,7 @@ async function mockStatus(page, body) {
 }
 
 async function openStatus(page) {
-  await page.locator('#statusMode').click();
+  await clickHeaderControl(page, '#statusMode');
   await expect(surface(page)).toBeVisible();
   await expect(surface(page)).not.toHaveAttribute('aria-busy', 'true');
 }
@@ -47,7 +47,7 @@ test.describe('gallery status', () => {
   test('running warm shows the accepted hierarchy and polls with one timer until ready', {tag: '@essential'}, async ({page}) => {
     const status = await mockStatus(page, RUNNING);
     await page.goto('/');
-    await expect(page.locator('#statusMode')).toBeVisible();
+    await expect(page.locator('#statusMode')).toHaveJSProperty('hidden', false);
     expect(status.requests).toBe(0);
     await openStatus(page);
 
@@ -212,19 +212,11 @@ test.describe('gallery status', () => {
     await openAlbum(page);
     await page.locator('#mediaFilter [data-filter="image"]').click();
     await page.locator('#mediaSort').selectOption('name');
-    await page.locator('#gridDensity [data-density-step="0"]').click();
+    await clickHeaderControl(page, '#gridDensity [data-density-step="0"]');
     const target = page.getByRole('button', {name: 'Открыть Photo 07.png'});
     await target.evaluate(element => scrollTo({top: element.getBoundingClientRect().top + scrollY - innerHeight / 2, behavior: 'instant'}));
     await target.focus();
-    const snapshot = () => page.evaluate(() => ({
-      url: location.pathname + location.search,
-      filter: document.querySelector('#mediaFilter [aria-pressed="true"]')?.getAttribute('data-filter'),
-      sort: /** @type {HTMLSelectElement} */ (document.querySelector('#mediaSort')).value,
-      columns: document.body.dataset.gridColumns,
-      scroll: Math.round(scrollY),
-      focus: document.activeElement?.getAttribute('data-path'),
-    }));
-    const before = await snapshot();
+    const before = await galleryView(page);
     expect(before.scroll).toBeGreaterThan(200);
     const listings = [];
     page.on('request', request => { if (request.url().includes('/api/list')) listings.push(request.url()); });
@@ -232,7 +224,7 @@ test.describe('gallery status', () => {
     await openStatus(page);
     await page.locator('#galleryMode').click();
     await expect(page.locator('#gallerySurface')).toBeVisible();
-    const after = await snapshot();
+    const after = await galleryView(page);
     expect({...after, scroll: 0}).toEqual({...before, scroll: 0});
     expect(Math.abs(after.scroll - before.scroll)).toBeLessThanOrEqual(2);
     expect(listings).toEqual([]);
@@ -242,6 +234,7 @@ test.describe('gallery status', () => {
     await mockStatus(page, RUNNING);
     await page.goto('/');
     const entry = page.getByRole('button', {name: 'Состояние галереи'});
+    if (await page.locator('#topbarMore').isVisible()) await page.locator('#topbarMore').click();
     await entry.focus();
     await page.keyboard.press('Enter');
     await expect(surface(page)).toBeVisible();
@@ -264,10 +257,11 @@ test.describe('gallery status', () => {
     test.skip(!testInfo.project.use.hasTouch, 'Touch viewports');
     await mockStatus(page, RUNNING);
     await page.goto('/');
+    if (await page.locator('#topbarMore').isVisible()) await page.locator('#topbarMore').tap();
     await page.locator('#statusMode').tap();
     await expect(surface(page)).toBeVisible();
     await expect(section(page, 'memories').locator('.gallery-status-metrics li')).toHaveText(['147 периодов', '12 воспоминаний', '6 показано', '0 ошибок']);
-    const box = await page.locator('#statusMode').boundingBox();
+    const box = await page.locator(await page.locator('#topbarMore').isVisible() ? '#topbarMore' : '#statusMode').boundingBox();
     expect(Math.min(box?.width ?? 0, box?.height ?? 0)).toBeGreaterThanOrEqual(32);
     const overflow = await surface(page).evaluate(element => element.scrollWidth - element.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);

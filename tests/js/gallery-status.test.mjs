@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {createStatusPoller, describeStatus, errorSubject, formatCount, formatMoment, isRelativeMediaPath, stateLabel, STATUS_POLL_MS} from '../../web/gallery-status.js';
+import {createStatusPoller, describeStatus, errorSubject, formatMoment, isRelativeMediaPath, stateLabel, STATUS_POLL_MS} from '../../web/gallery-status.js';
+import {formatCount} from '../../web/format.js';
 
 const now = new Date(2026, 9, 23, 13, 30);
 const local = (day, hours, minutes) => new Date(2026, 9, day, hours, minutes).toISOString();

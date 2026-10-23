@@ -1,20 +1,19 @@
 import {test, expect} from '@playwright/test';
-import {enterSelectionMode} from './helpers.mjs';
+import {clickHeaderControl, directory, enterSelectionMode, listing, mockListings, scrollTop, stubMedia} from './helpers.mjs';
 import {VIEWS_KEY} from '../../web/gallery-state.js';
 import {LIVE_REFRESH_MS} from '../../web/live-refresh.js';
 
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const BASE_TIME = 1_760_000_000;
 const PHOTOS = 60;
 
-const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
 const photo = (path, hour) => ({name: path.split('/').pop(), path, kind: 'image', size: 1000 + hour, modTime: '2026-01-15T12:00:00Z', sortTime: BASE_TIME + hour * 3600});
 const livePhoto = index => photo(`Live/Photo ${String(index).padStart(3, '0')}.png`, index);
 
 /**
  * Synthetic library whose listings the test edits between checks. Every listing request is
  * recorded as `path` or `path?recursive`; requests matching `hold` wait until released, and
- * requests matching `fail` answer 500.
+ * requests matching `fail` answer 500. The answer is read when it is sent, so a held request
+ * returns the listing of that moment.
  */
 async function mockLibrary(page) {
   const listings = {
@@ -24,38 +23,16 @@ async function mockLibrary(page) {
     'Live/Sub': [photo('Live/Sub/Deep.png', 100)],
     Other: [photo('Other/One.png', 1), photo('Other/Two.png', 2)],
   };
-  /** @type {{key: string, release: () => Promise<void>}[]} */
-  const held = [];
-  const library = {
-    listings,
-    held,
-    requests: /** @type {string[]} */ ([]),
-    hold: (/** @type {string} */ key) => false,
-    fail: (/** @type {string} */ key) => false,
-  };
-  await page.route(url => url.pathname === '/api/list', route => {
-    const params = new URL(route.request().url()).searchParams;
-    const path = params.get('path') ?? '';
-    const key = params.has('recursive') ? `${path}?recursive` : path;
-    library.requests.push(key);
-    const failing = library.fail(key);
-    // The answer is read when it is sent, so a held request returns the listing of that moment.
-    const fulfill = () => (failing
-      ? route.fulfill({status: 500, body: 'unavailable'})
-      : route.fulfill({json: {path: path || '.', title: 'E2E Gallery', entries: listings[key] ?? []}})).catch(() => {});
-    if (library.hold(key)) {
-      held.push({key, release: fulfill});
-      return undefined;
-    }
-    return fulfill();
-  });
-  await page.route(url => ['/api/thumb', '/api/cover', '/api/media'].includes(url.pathname), route => route.fulfill({contentType: 'image/png', body: ONE_PIXEL_PNG}));
+  const library = Object.assign(
+    await mockListings(page, (key, path) => (library.fail(key) ? {status: 500, body: 'unavailable'} : listing(path, listings[key] ?? []))),
+    {listings, fail: (/** @type {string} */ key) => false},
+  );
+  await stubMedia(page, ['/api/thumb', '/api/cover', '/api/media']);
   return library;
 }
 
 const tiles = page => page.locator('#mediaGrid .media-card');
 const tile = (page, path) => page.locator(`#mediaGrid .media-card[data-path="${path}"]`);
-const scrollTop = page => page.evaluate(() => Math.round(scrollY));
 const checksOf = (library, key) => library.requests.filter(request => request === key).length;
 
 async function openLive(page, library) {
@@ -110,7 +87,7 @@ test('a new file appears in place: scroll, focus, controls, address, and saved v
   // Photos only, oldest first, the densest grid: none of them is the default.
   await page.locator('#mediaFilter [data-filter="image"]').click();
   await page.locator('#mediaDirection').click();
-  await page.locator('#gridDensity [data-density-step="2"]').click();
+  await clickHeaderControl(page, '#gridDensity [data-density-step="2"]');
   await expect(tiles(page).first()).toHaveAttribute('data-path', 'Live/Photo 001.png');
 
   const focused = tile(page, 'Live/Photo 030.png');
@@ -333,7 +310,7 @@ test('at most one background check runs, and a manual refresh replaces it withou
 
   // Manual refresh stays the explicit full load and aborts the background check.
   library.hold = () => false;
-  await page.locator('#refresh').click();
+  await clickHeaderControl(page, '#refresh');
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
   expect(checksOf(library, 'Live')).toBe(3);
   await library.held[0].release();
@@ -378,4 +355,19 @@ test('an unchanged listing keeps every tile element, and collage selection pause
   await page.locator('#collageSelectionCancel').click();
   await nextCheck(page, library);
   await expect(tile(page, 'Live/During.png')).toHaveCount(1);
+});
+
+test('another section pauses checks; coming back after a skipped tick checks once', async ({page}) => {
+  const library = await mockLibrary(page);
+  await openLive(page, library);
+  await page.locator('#collageMode').click();
+  await expect(page.locator('#collageSurface')).toBeVisible();
+  library.listings.Live.push(photo('Live/Away.png', 700));
+  await page.clock.runFor(LIVE_REFRESH_MS * 2);
+  expect(checksOf(library, 'Live')).toBe(1);
+
+  await page.locator('#galleryMode').click();
+  await expect(tile(page, 'Live/Away.png')).toHaveCount(1);
+  await pause(page);
+  expect(checksOf(library, 'Live')).toBe(2);
 });

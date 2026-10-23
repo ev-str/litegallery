@@ -3,28 +3,7 @@
 // failures and the memories build, all from GET /api/status. Nothing here starts,
 // stops or configures the warmer.
 
-/**
- * Russian plural, as in format.js: `147 периодов`, `1 ошибка`.
- * @param {number} value @param {readonly string[]} forms
- */
-export function formatCount(value, forms) {
-  const mod10 = value % 10;
-  const mod100 = value % 100;
-  const form = mod10 === 1 && mod100 !== 11 ? forms[0] : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? forms[1] : forms[2];
-  return `${value} ${form}`;
-}
-
-/** Cache size: `0 Б`, `512 КБ`, `1.2 ГБ`. @param {number} bytes */
-export function formatSize(bytes) {
-  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit++;
-  }
-  return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
-}
+import {formatBytes, formatCount} from './format.js';
 
 /** Pause between the end of one status request and the next while the warmer runs. */
 export const STATUS_POLL_MS = 5_000;
@@ -172,7 +151,7 @@ export function describeStatus(status, now = new Date()) {
     },
     cache: cache && {
       metrics: metricList(cache, CACHE_METRICS),
-      size: size === null ? '' : `Размер кэша: ${formatSize(size)}`,
+      size: size === null ? '' : `Размер кэша: ${formatBytes(size) || '0 Б'}`,
       lastFullScan: scanned ? `Последний полный обход: ${formatMoment(scanned, now)}` : '',
     },
     errors: (ok && Array.isArray(status.recentErrors) ? status.recentErrors : [])

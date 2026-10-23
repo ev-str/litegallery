@@ -1,12 +1,10 @@
 import {test, expect} from '@playwright/test';
 import {GROUP_STORAGE_KEY} from '../../web/date-groups.js';
 import {WINDOW_MIN_ITEMS} from '../../web/media-window.js';
-
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+import {clickHeaderControl, directory, listing, mockListings, scrollTop, stubMedia} from './helpers.mjs';
 
 // The browser runs in Europe/Moscow (UTC+3, no DST): a Moscow wall-clock time as Unix seconds.
 const moscow = (year, month, day, hour = 12) => Date.UTC(year, month - 1, day, hour - 3) / 1000;
-const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
 const file = (path, sortTime, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 2048, modTime: '2026-01-15T12:00:00Z', sortTime});
 
 // Names and dates disagree, so name order and date order differ; the dates cross a year and a month border.
@@ -35,21 +33,12 @@ const LISTINGS = {
 };
 
 async function mockLibrary(page) {
-  await page.route(url => url.pathname === '/api/list', route => {
-    const params = new URL(route.request().url()).searchParams;
-    const path = params.get('path') ?? '';
-    const key = params.has('recursive') ? `${path}?recursive` : path;
-    return route.fulfill({json: {path: path || '.', title: 'E2E Gallery', entries: LISTINGS[key] ?? []}}).catch(() => {});
-  });
-  await page.route(url => ['/api/thumb', '/api/video-poster', '/api/cover', '/api/media', '/api/image-info'].includes(url.pathname), route => {
-    if (new URL(route.request().url()).pathname === '/api/image-info') return route.fulfill({json: {width: 640, height: 900}});
-    return route.fulfill({contentType: 'image/png', body: ONE_PIXEL_PNG});
-  });
+  await mockListings(page, (key, path) => listing(path, LISTINGS[key] ?? []));
+  await stubMedia(page);
 }
 
 const groupSelect = page => page.locator('#mediaGroup');
 const tile = (page, path) => page.locator(`#mediaGrid .media-card[data-path="${path}"]`);
-const scrollTop = page => page.evaluate(() => Math.round(scrollY));
 const shown = async page => new URL(await page.locator('#viewer a.download').getAttribute('href'), 'http://x').searchParams.get('path');
 
 /** Headings as `# label` and tiles as file names, in DOM order. */
@@ -71,8 +60,6 @@ async function chooseGrouping(page, mode) {
 }
 
 test.beforeEach(async ({page}, testInfo) => {
-  // The phone header is wider than the screen at a21ce15 already; gallery flows run on desktop and tablet.
-  test.skip(Boolean(testInfo.project.use.isMobile) && !testInfo.titlePath.includes('on a phone'), 'Gallery flows run on desktop and tablet; the phone has its own test.');
   await mockLibrary(page);
 });
 
@@ -193,7 +180,7 @@ test('the viewer and TV get the grouped visual order; focus returns to the opene
   await expect(tile(page, 'Trip/c.jpg')).toBeFocused();
 
   // TV starts from the first tile on screen and steps in the same order.
-  await page.locator('#tvMode').click();
+  await clickHeaderControl(page, '#tvMode');
   await expect(page.locator('#viewer')).toHaveAttribute('data-tv', 'true');
   expect(await shown(page)).toBe(`Trip/${order[0]}`);
   await page.keyboard.press('ArrowRight');
@@ -228,7 +215,7 @@ test('switching sections keeps the grouping, and a refresh or reload keeps it wi
   await chooseGrouping(page, 'day');
 
   for (const entry of ['#searchMode', '#collageMode', '#statusMode']) {
-    await page.locator(entry).click();
+    await clickHeaderControl(page, entry);
     await page.locator('#galleryMode').click();
     await expect(groupSelect(page)).toHaveValue('day');
   }
@@ -317,7 +304,8 @@ async function watchErrors(page) {
   return errors;
 }
 
-test('density changes in a deep grouped list keep the focused tile, its group, and the viewer position', {tag: '@essential'}, async ({page}) => {
+test('density changes in a deep grouped list keep the focused tile, its group, and the viewer position', {tag: '@essential'}, async ({page}, testInfo) => {
+  test.skip(Boolean(testInfo.project.use.isMobile), 'Desktop densities 3, 5, and 7; the phone density has its own test.');
   const errors = await watchErrors(page);
   await page.emulateMedia({reducedMotion: 'reduce'});
   await page.goto(`/?path=${LARGE}`);

@@ -395,14 +395,12 @@ test('lists up to the threshold render whole; clear drops every card', t => {
   assert.equal(view.windowed, false);
   assert.equal(indices().length, WINDOW_MIN_ITEMS);
   assert.equal(page.grid.style.paddingBottom, '');
-  assert.equal(page.grid.attributes.get('aria-live'), 'polite');
   view.setItems(Array.from({length: WINDOW_MIN_ITEMS + 1}, (_, index) => ({path: `next-${index}`})));
   assert.equal(signals.get(WINDOW_MIN_ITEMS - 1).aborted, true, 'cards of the previous list are dropped');
-  assert.equal(page.grid.attributes.get('aria-live'), 'off');
   view.clear();
   assert.equal(page.grid.childNodes.length, 0);
   assert.equal(signals.get(0).aborted, true);
-  assert.equal(page.grid.attributes.get('aria-live'), 'polite');
+  assert.equal(page.grid.attributes.has('aria-live'), false, 'the status line announces counts, not the grid');
 });
 
 // Groups of 7 items in 4 columns: a 30 px heading, a full row, and a row of 3.

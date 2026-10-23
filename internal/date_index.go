@@ -1,8 +1,6 @@
 package internal
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,22 +60,14 @@ func (s *Server) buildDateIndex(manifests map[string]metadataManifest, generated
 }
 
 func (s *Server) writeDateIndex(index dateIndex) error {
-	data, err := json.Marshal(index)
-	if err != nil {
-		return err
-	}
-	return writeFileAtomic(s.dateIndexPath(), data)
+	return writeJSONAtomic(s.dateIndexPath(), index)
 }
 
 // readDateIndex treats a missing, corrupt, or unknown-version index as
 // unavailable.
 func (s *Server) readDateIndex() (dateIndex, bool) {
-	data, err := os.ReadFile(s.dateIndexPath())
-	if err != nil {
-		return dateIndex{}, false
-	}
 	var index dateIndex
-	if json.Unmarshal(data, &index) != nil || index.Version != dateIndexVersion || index.Items == nil || index.GeneratedAt.IsZero() {
+	if !readJSONFile(s.dateIndexPath(), &index) || index.Version != dateIndexVersion || index.Items == nil || index.GeneratedAt.IsZero() {
 		return dateIndex{}, false
 	}
 	for _, item := range index.Items {

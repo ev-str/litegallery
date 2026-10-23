@@ -71,27 +71,7 @@ func (s *Server) writeMetadataManifest(directory string, manifest metadataManife
 	if current, readErr := os.ReadFile(destination); readErr == nil && string(current) == string(data) {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(destination), ".metadata-*.json")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o644); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, destination)
+	return writeFileAtomic(destination, data)
 }
 
 func validMetadataManifest(cache, path string) bool {

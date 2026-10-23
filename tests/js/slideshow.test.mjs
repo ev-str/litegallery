@@ -4,33 +4,7 @@ import test from 'node:test';
 import {
   createAutoplay, createPlaylist, DEFAULT_INTERVAL, INTERVAL_KEY, INTERVALS, readInterval, writeInterval,
 } from '../../web/slideshow.js';
-
-/** Fake timers that record every live handle. */
-function fakeTimers() {
-  let now = 0;
-  let nextId = 1;
-  const live = new Map();
-  return {
-    live,
-    setTimer(callback, ms) {
-      const id = nextId++;
-      live.set(id, {at: now + ms, callback});
-      return id;
-    },
-    clearTimer(id) { live.delete(id); },
-    advance(ms) {
-      const until = now + ms;
-      for (;;) {
-        const due = [...live.entries()].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at)[0];
-        if (!due) break;
-        live.delete(due[0]);
-        now = due[1].at;
-        due[1].callback();
-      }
-      now = until;
-    },
-  };
-}
+import {fakeTimers} from './fake-timers.mjs';
 
 /** Deterministic random sequence. */
 const sequence = values => {
@@ -38,7 +12,7 @@ const sequence = values => {
   return () => values[index++ % values.length];
 };
 
-test('autoplay keeps exactly one timer through repeated Start/Stop and manual restarts', () => {
+test('autoplay keeps exactly one timer through repeated Start/Stop and manual restarts', async () => {
   const timers = fakeTimers();
   let ticks = 0;
   const autoplay = createAutoplay(() => { ticks += 1; autoplay.schedule(); }, timers);
@@ -46,7 +20,7 @@ test('autoplay keeps exactly one timer through repeated Start/Stop and manual re
   autoplay.start();
   autoplay.schedule();
   assert.equal(timers.live.size, 1);
-  timers.advance(DEFAULT_INTERVAL * 1000 * 3);
+  await timers.advance(DEFAULT_INTERVAL * 1000 * 3);
   assert.equal(ticks, 3);
   assert.equal(timers.live.size, 1);
 
@@ -54,7 +28,7 @@ test('autoplay keeps exactly one timer through repeated Start/Stop and manual re
   autoplay.stop();
   assert.equal(timers.live.size, 0);
   assert.equal(autoplay.playing, false);
-  timers.advance(60_000);
+  await timers.advance(60_000);
   assert.equal(ticks, 3);
 
   // Scheduling while stopped never arms a timer.
@@ -62,19 +36,19 @@ test('autoplay keeps exactly one timer through repeated Start/Stop and manual re
   assert.equal(timers.live.size, 0);
 });
 
-test('a new interval times the next transition without a second timer', () => {
+test('a new interval times the next transition without a second timer', async () => {
   const timers = fakeTimers();
   let ticks = 0;
   const autoplay = createAutoplay(() => { ticks += 1; autoplay.schedule(); }, {...timers, seconds: 5});
   autoplay.start();
-  timers.advance(4_000);
+  await timers.advance(4_000);
   autoplay.setSeconds(10);
   assert.equal(timers.live.size, 1);
-  timers.advance(9_000);
+  await timers.advance(9_000);
   assert.equal(ticks, 0, 'the old 5 s deadline was cancelled');
-  timers.advance(1_000);
+  await timers.advance(1_000);
   assert.equal(ticks, 1);
-  timers.advance(10_000);
+  await timers.advance(10_000);
   assert.equal(ticks, 2);
 
   // Changing the interval while stopped only stores it.

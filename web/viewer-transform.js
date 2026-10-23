@@ -1,3 +1,4 @@
+// @ts-check
 // Display-only geometry for the photo viewer. Sizes are CSS pixels, offsets are
 // measured from the centre of the stage, and rotation is in quarter turns. Nothing
 // here touches the file: the viewer only transforms the <img> element.
@@ -37,9 +38,11 @@ export function scaleLimits(/** @type {Frame} */ frame, /** @type {number} */ ro
   return {fit, min: Math.min(fit, 1), max: Math.max(MAX_SCALE, fit * 2)};
 }
 
+/** @param {number} value @param {number} min @param {number} max */
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 // A photo larger than the stage may move until its edge meets the stage edge; a smaller one stays centred.
+/** @param {number} offset @param {number} content @param {number} visible */
 function clampOffset(offset, content, visible) {
   const slack = Math.max(0, (content - visible) / 2);
   return clamp(offset, -slack, slack);

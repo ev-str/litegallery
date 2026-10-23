@@ -1,15 +1,68 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Application sections in the header: Галерея, Найти, Воспоминания, Коллаж,
+  and Состояние галереи. Switching sections keeps the gallery scroll, focus,
+  and controls without reloading the folder.
+- Fixed-column grid with a density switch: 3, 5, or 7 columns on computers and
+  1, 2, or 3 on phones, remembered per device class.
+- Back, forward, and reload restore the folder, its scroll position, and the
+  focused tile.
+- Viewer zoom, pan, pinch, and rotation; slideshow with 5, 10, or 30 second
+  intervals and shuffle; TV mode; arrow-key navigation between tiles for TV
+  remotes.
+- `Из подпапок` shows the media of a folder together with its subfolders
+  (`/api/list?recursive=1`).
+- Folders with thousands of files render only the tiles near the screen.
+- The open folder is checked in the background every 45 seconds; changes
+  appear in place and keep the scroll position and focus.
+- `Найти` searches file names in the shown listing, and relative paths in
+  `Из подпапок` mode.
+- Date grouping by year, month, or day.
+- `Воспоминания` shows events from the same days in earlier years, built by the
+  cache warmer from a date index.
+- Read-only `Состояние галереи`: the cache warmer run, cache totals, recent
+  errors, and the memories build, served by `/api/status`.
+- On phones the density switch, TV mode, refresh, and gallery status sit in a
+  `⋯` menu, so the header fits the screen.
+
+### Changed
+
+- A recursive listing stops at 100,000 media files; a larger subtree answers
+  HTTP 413 and the gallery shows a clear message instead of a generic error.
+- The grids no longer announce every tile to screen readers; the status line
+  announces the item count.
+
+### Fixed
+
+- Backspace and Escape in text fields, selects, and open dialogs, such as the
+  collage title, no longer open the parent folder.
+- Returning to Галерея from another section checks the folder once when a
+  background check was skipped meanwhile.
+
+### Removed
+
+- The Linux arm64 build target and release binary. Releases ship FreeBSD amd64
+  and Linux amd64.
+
+### Development
+
+- Shared browser-test helpers for listings, media stubs, and header controls;
+  shared fake timers for unit tests.
+- Type checking also covers `gallery-state.js`, `icons.js`, `video-posters.js`,
+  and `viewer-transform.js`.
+
 ## Planned
 
 - Refresh the visual hierarchy with an album title, media statistics, and a
   unified filter and sorting toolbar.
-- Refine folder covers and media cards with improved typography, depth, loading
-  placeholders, and restrained motion.
+- Refine folder covers and media cards with improved typography, depth, and
+  restrained motion.
 - Present EXIF metadata as a side panel on larger screens and a bottom sheet on
   phones.
-- Improve mobile controls and TV-focused keyboard navigation without adding a
-  frontend build step or external runtime dependencies.
 
 ## 0.2.2 — 2026-10-06
 

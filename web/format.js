@@ -10,7 +10,7 @@ export const apiURL = (endpoint, path, version = '') => `${endpoint}?path=${enco
 /** @param {number | undefined} bytes */
 export function formatBytes(bytes) {
   if (!bytes) return '';
-  const units = ['Б', 'КБ', 'МБ', 'ГБ'];
+  const units = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
   let value = bytes;
   let unit = 0;
   while (value >= 1024 && unit < units.length - 1) {
@@ -20,7 +20,7 @@ export function formatBytes(bytes) {
   return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
-/** Russian plural: formatCount(3, ['файл', 'файла', 'файлов']) → '3 файла'. @param {number} value @param {string[]} forms */
+/** Russian plural: formatCount(3, ['файл', 'файла', 'файлов']) → '3 файла'. @param {number} value @param {readonly string[]} forms */
 export function formatCount(value, forms) {
   const mod10 = value % 10;
   const mod100 = value % 100;

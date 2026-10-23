@@ -2,36 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {createRefreshLoop, LIVE_REFRESH_MS} from '../../web/live-refresh.js';
-
-/** Fake timers that record every live handle. */
-function fakeTimers() {
-  let now = 0;
-  let nextId = 1;
-  const live = new Map();
-  return {
-    live,
-    setTimer(callback, ms) {
-      const id = nextId++;
-      live.set(id, {at: now + ms, callback});
-      return id;
-    },
-    clearTimer(id) { live.delete(id); },
-    async advance(ms) {
-      const until = now + ms;
-      for (;;) {
-        const due = [...live.entries()].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at)[0];
-        if (!due) break;
-        live.delete(due[0]);
-        now = due[1].at;
-        due[1].callback();
-        await settle();
-      }
-      now = until;
-    },
-  };
-}
-
-const settle = () => new Promise(resolve => setImmediate(resolve));
+import {fakeTimers, settle} from './fake-timers.mjs';
 
 /** A check whose answers the test releases one by one. */
 function heldChecks() {
@@ -220,4 +191,26 @@ test('a page that must not change skips its tick and keeps the plain interval', 
   allowed = true;
   await timers.advance(LIVE_REFRESH_MS);
   assert.equal(calls, 1);
+});
+
+test('resume checks once only when a tick was skipped meanwhile', async () => {
+  const timers = fakeTimers();
+  let allowed = true;
+  let calls = 0;
+  const loop = createRefreshLoop({check: async () => { calls += 1; }, canCheck: () => allowed, ...timers});
+  loop.start();
+  loop.resume();
+  await settle();
+  assert.equal(calls, 0, 'no tick was skipped');
+
+  allowed = false;
+  await timers.advance(LIVE_REFRESH_MS);
+  allowed = true;
+  loop.resume();
+  loop.resume();
+  await settle();
+  assert.equal(calls, 1, 'one make-up check');
+  assert.equal(timers.live.size, 1, 'the interval counts from it');
+  await timers.advance(LIVE_REFRESH_MS);
+  assert.equal(calls, 2);
 });

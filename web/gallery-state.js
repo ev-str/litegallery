@@ -1,3 +1,4 @@
+// @ts-check
 // The one owner of gallery view state. Controls persist in localStorage under the
 // keys used since v0.2; per-folder views (scroll anchor, focus target) live for the
 // tab in sessionStorage, so they survive refresh and reload but not a new tab.
@@ -30,7 +31,7 @@ export function readPageURL(search) {
 /**
  * @typedef {'desktop'|'phone'} DeviceClass
  * @typedef {{scrollY?: number, anchorPath?: string|null, anchorOffset?: number, focusPath?: string, recursive?: boolean}} FolderView
- * @typedef {{folder: string, path: string, index: number}} OpenedItem
+ * @typedef {{folder: string, path: string, index: number, source: 'gallery'|'search'}} OpenedItem
  * @typedef {Pick<Storage, 'getItem'|'setItem'>} KeyValueStorage
  */
 

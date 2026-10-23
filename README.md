@@ -4,7 +4,7 @@
   <p>
     <img alt="Go" src="https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go&logoColor=white">
     <img alt="FreeBSD" src="https://img.shields.io/badge/FreeBSD-amd64-AB2B28?logo=freebsd&logoColor=white">
-    <img alt="Linux" src="https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-FCC624?logo=linux&logoColor=black">
+    <img alt="Linux" src="https://img.shields.io/badge/Linux-amd64-FCC624?logo=linux&logoColor=black">
     <img alt="License" src="https://img.shields.io/badge/license-MIT-4c956c">
   </p>
 </div>
@@ -21,7 +21,8 @@ photo library already has a useful folder structure and must remain untouched.
 ## Highlights
 
 - Folder cards with covers taken from the first available image.
-- Responsive masonry layout for phones, desktop browsers, and TVs.
+- Fixed-column responsive grid: 3, 5, or 7 columns on computers and 1, 2, or 3
+  on phones.
 - Photo and video viewer with fit-to-screen and fullscreen modes.
 - Keyboard, remote-control focus, swipe, and previous/next navigation.
 - Filters for all media, photos only, or videos only.
@@ -52,7 +53,7 @@ photo library already has a useful folder structure and must remain untouched.
 | Collages | 2–12 photos, reusable templates, crop tools, named local JSON/ZIP projects, and print-ready JPEG export |
 | Interface | Responsive layouts for phones, computers, and TVs |
 | Runtime | One static binary, without a database or FFmpeg |
-| Platforms | FreeBSD amd64 and Linux amd64/arm64 |
+| Platforms | FreeBSD amd64 and Linux amd64 |
 
 ## Quick start
 
@@ -225,16 +226,15 @@ Builds from a Git checkout embed the value of `git describe` automatically.
 Pass `VERSION=<tag>` only when building from a source tree without matching Git
 metadata or when an explicit version override is required.
 
-For Linux-based NAS distributions, build all common architectures:
+For Linux-based NAS distributions, build the Linux amd64 binary:
 
 ```sh
 make build-linux
 ```
 
-This produces `litegallery-linux-amd64` and `litegallery-linux-arm64` in
-`build/`. Individual targets with the same suffixes are also available. The
-64-bit binaries are statically linked and are not tied to a specific Linux
-distribution.
+This produces `build/litegallery-linux-amd64`; `make build-linux-amd64` is the
+same target. The binary is statically linked and is not tied to a specific
+Linux distribution.
 
 Copy it to the NAS, for example as `/usr/local/sbin/litegallery`, then copy
 [`deploy/litegallery.rc`](deploy/litegallery.rc) to a persistent location. The
@@ -312,7 +312,7 @@ There are two suites:
 
 | Suite | Command | When | Scope |
 | --- | --- | --- | --- |
-| Essential | `npm run test:e2e:essential` | before every commit | tests tagged `@essential`, Chromium desktop only, stops at the first failure (about 15 seconds) |
+| Essential | `npm run test:e2e:essential` | before every commit | tests tagged `@essential`, Chromium desktop only, stops at the first failure |
 | Full | `npm run test:e2e:full` | before a release | every spec in every configured browser and viewport, stops after 3 failures |
 
 Useful variants:
@@ -345,8 +345,8 @@ gh release create v0.2.2 dist/* --title "LiteGallery v0.2.2" --notes-file <notes
 ```
 
 `make release` refuses to build when `git describe` is not an exact `vX.Y.Z`
-tag or the tree has uncommitted changes. It writes the FreeBSD and Linux
-binaries plus a `SHA256SUMS` file with bare file names to `dist/`, so
+tag or the tree has uncommitted changes. It writes the FreeBSD amd64 and Linux
+amd64 binaries plus a `SHA256SUMS` file with bare file names to `dist/`, so
 downloads can be verified with `shasum -a 256 -c SHA256SUMS`.
 
 ### Documentation screenshots

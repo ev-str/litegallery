@@ -1,11 +1,10 @@
 import {test, expect} from '@playwright/test';
 import {VIEWS_KEY} from '../../web/gallery-state.js';
+import {clickHeaderControl, directory, listing, mockListings, scrollTop, stubMedia} from './helpers.mjs';
 
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const FOLDERS = Array.from({length: 40}, (_, index) => `Folder ${String(index + 1).padStart(2, '0')}`);
 const PHOTOS = 60;
 
-const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
 const photo = (folder, index) => {
   const name = `Photo ${String(index).padStart(3, '0')}.png`;
   return {name, path: `${folder}/${name}`, kind: 'image', size: 1000 + index, modTime: '2026-01-15T12:00:00Z', sortTime: 1_760_000_000 + index * 3600};
@@ -17,26 +16,13 @@ const photo = (folder, index) => {
  */
 async function mockLibrary(page) {
   const overrides = new Map();
-  /** @type {{path: string, release: () => Promise<void>}[]} */
-  const held = [];
-  const library = {overrides, held, hold: (/** @type {string} */ path) => false};
-  await page.route(url => url.pathname === '/api/list', route => {
-    const path = new URL(route.request().url()).searchParams.get('path') ?? '';
-    const entries = overrides.get(path) ?? (path ? Array.from({length: PHOTOS}, (_, index) => photo(path, index + 1)) : FOLDERS.map(directory));
-    const fulfill = () => route.fulfill({json: {path: path || '.', title: 'E2E Gallery', entries}});
-    if (library.hold(path)) {
-      held.push({path, release: fulfill});
-      return undefined;
-    }
-    return fulfill();
-  });
-  await page.route(url => ['/api/thumb', '/api/cover', '/api/media'].includes(url.pathname), route => route.fulfill({contentType: 'image/png', body: ONE_PIXEL_PNG}));
+  const library = Object.assign(await mockListings(page, (key, path) => listing(path, overrides.get(path) ?? (path ? Array.from({length: PHOTOS}, (_, index) => photo(path, index + 1)) : FOLDERS.map(directory)))), {overrides});
+  await stubMedia(page, ['/api/thumb', '/api/cover', '/api/media']);
   return library;
 }
 
 const folderCard = (page, name) => page.getByRole('button', {name: `Открыть папку ${name}`});
 const tile = (page, path) => page.locator(`#mediaGrid .media-card[data-path="${path}"]`);
-const scrollTop = page => page.evaluate(() => Math.round(scrollY));
 const historyLength = page => page.evaluate(() => history.length);
 
 async function scrollToCard(page, locator) {
@@ -127,7 +113,7 @@ test('refresh keeps filter, sorting, direction, density, scroll, and the focused
   await page.locator('#mediaSort').selectOption('name');
   await page.locator('#mediaDirection').click();
   const columns = testInfo.project.use.viewport.width <= 700 ? 3 : 7;
-  await page.locator(`#gridDensity [data-columns="${columns}"]`).click();
+  await clickHeaderControl(page, `#gridDensity [data-columns="${columns}"]`);
   const order = await page.locator('#mediaGrid .media-card').evaluateAll(cards => cards.map(card => card.getAttribute('data-path')));
   expect(order[0]).toBe('Folder 02/Photo 001.png');
   const focused = tile(page, 'Folder 02/Photo 040.png');
@@ -147,13 +133,15 @@ test('refresh keeps filter, sorting, direction, density, scroll, and the focused
   await expect(page.locator('#mediaDirection')).toHaveAttribute('title', 'От A к Z');
   await expect(page.locator(`#gridDensity [data-columns="${columns}"]`)).toHaveAttribute('aria-pressed', 'true');
 
-  // The refresh button keeps its own focus.
+  // The refresh button keeps its own focus; on the phone the ⋯ menu that holds it takes it.
+  const phone = await page.locator('#topbarMore').isVisible();
+  if (phone) await page.locator('#topbarMore').click();
   const refresh = page.locator('#refresh');
   await refresh.evaluate(element => element.focus({preventScroll: true}));
   await refresh.press('Enter');
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
   await expect.poll(() => scrollTop(page)).toBe(scroll);
-  await expect(refresh).toBeFocused();
+  await expect(phone ? page.locator('#topbarMore') : refresh).toBeFocused();
 
   // A reload restores the same view from session storage.
   await page.reload();
@@ -183,7 +171,7 @@ test('filter, sort, and density changes keep the controls and the top tile in pl
   await top.evaluate((element, offset) => scrollTo({top: element.getBoundingClientRect().top + scrollY - offset, behavior: 'instant'}), headerBottom + 6);
   const before = (await top.boundingBox()).y;
   const columns = testInfo.project.use.viewport.width <= 700 ? 3 : 7;
-  await page.locator(`#gridDensity [data-columns="${columns}"]`).click();
+  await clickHeaderControl(page, `#gridDensity [data-columns="${columns}"]`);
   expect(Math.round((await top.boundingBox()).y)).toBe(Math.round(before));
 });
 
@@ -240,7 +228,8 @@ test('a tile that disappears while the viewer is open falls back safely', async 
   await closeEmpty.focus();
   await closeEmpty.press('Enter');
   await expect(page.locator('#viewer')).toBeHidden();
-  const refresh = page.locator('#refresh');
+  // An empty page returns focus to Обновить, or on the phone to the ⋯ menu that holds it.
+  const refresh = page.locator(await page.locator('#topbarMore').isVisible() ? '#topbarMore' : '#refresh');
   await expect(refresh).toBeFocused();
   await expect(refresh).toHaveCSS('outline-style', 'solid');
   expect(await refresh.evaluate(element => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThan(0);
@@ -263,7 +252,7 @@ test('state restore keeps latest-request-wins for navigation and refresh', {tag:
   await page.locator('#breadcrumbs button', {hasText: 'Все фото'}).click();
   await expect.poll(() => library.held.length).toBe(2);
   const [stale, latest] = library.held.splice(0);
-  expect([stale.path, latest.path]).toEqual(['Folder 08', '']);
+  expect([stale.key, latest.key]).toEqual(['Folder 08', '']);
 
   await latest.release();
   await expect(page.locator('#folders .folder-card')).toHaveCount(FOLDERS.length);
@@ -282,8 +271,8 @@ test('state restore keeps latest-request-wins for navigation and refresh', {tag:
 
   // Two refreshes: the interrupted one must not overwrite the remembered scroll.
   library.hold = path => path === '';
-  await page.locator('#refresh').click();
-  await page.locator('#refresh').click();
+  await clickHeaderControl(page, '#refresh');
+  await clickHeaderControl(page, '#refresh');
   await expect.poll(() => library.held.length).toBe(2);
   const [first, second] = library.held.splice(0);
   await second.release();

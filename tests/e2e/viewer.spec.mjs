@@ -1,23 +1,11 @@
 import {test, expect} from '@playwright/test';
-import {isDesktopBrowserProject, openAlbum, readDownload} from './helpers.mjs';
+import {focusWithKeyboard, isDesktopBrowserProject, openAlbum, readDownload} from './helpers.mjs';
 import {fitScale, MAX_SCALE, ZOOM_STEP} from '../../web/viewer-transform.js';
 
 test.beforeEach(async ({page}, testInfo) => {
   test.skip(!isDesktopBrowserProject(testInfo), 'Viewer flows run once per desktop browser engine.');
   await page.clock.install();
 });
-
-// Reach a control with real Tab presses. Safari's Tab skips buttons by default,
-// so WebKit falls back to focus after a key press, which it treats as keyboard
-// focus; Chromium and Firefox take the Tab path.
-async function focusWithKeyboard(page, locator) {
-  for (let step = 0; step < 12; step += 1) {
-    if (await locator.evaluate(element => element === document.activeElement)) return;
-    await page.keyboard.press('Tab');
-  }
-  await page.keyboard.press('ArrowDown');
-  await locator.focus();
-}
 
 async function openFirstPhoto(page) {
   await openAlbum(page);
@@ -79,7 +67,7 @@ test('the keyboard-focused control stays visible while other controls hide', asy
   const close = viewer.getByRole('button', {name: 'Закрыть', exact: true});
   const slideshow = viewer.locator('.slideshow');
 
-  await focusWithKeyboard(page, next);
+  await focusWithKeyboard(page, next, {steps: 12, fallback: 'ArrowDown'});
   await expect(next).toBeFocused();
   await expect(next).toHaveCSS('outline-style', 'solid');
   await page.clock.runFor(3_000);
@@ -87,7 +75,7 @@ test('the keyboard-focused control stays visible while other controls hide', asy
   await expect(next).toHaveCSS('opacity', '1');
   await expect(close).toHaveCSS('opacity', '0');
 
-  await focusWithKeyboard(page, slideshow);
+  await focusWithKeyboard(page, slideshow, {steps: 12, fallback: 'ArrowDown'});
   await expect(slideshow).toBeFocused();
   await page.clock.runFor(3_000);
   await expect(viewer).toHaveAttribute('data-idle', 'true');
@@ -412,7 +400,7 @@ test('photo tools animate discrete steps unless reduced motion is requested', as
 test('photo tools are reachable by keyboard and stay visible while focused', async ({page}) => {
   const viewer = await openPhoto(page, 'Album A/Photo 01.png');
   const rotate = viewer.getByRole('button', {name: 'Повернуть вправо'});
-  await focusWithKeyboard(page, rotate);
+  await focusWithKeyboard(page, rotate, {steps: 12, fallback: 'ArrowDown'});
   await expect(rotate).toHaveCSS('outline-style', 'solid');
   await page.keyboard.press('Enter');
   await expect(viewer.locator('.stage')).toHaveAttribute('data-rotation', '90');

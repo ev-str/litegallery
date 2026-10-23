@@ -2,12 +2,19 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
+
+// maxRecursiveEntries bounds the memory and the response size of one
+// recursive listing on a large library subtree.
+var maxRecursiveEntries = 100_000
+
+var errTooManyEntries = errors.New("too many entries")
 
 // parseRecursive accepts only an absent value, "0", or "1".
 func parseRecursive(value string) (recursive bool, ok bool) {
@@ -30,6 +37,10 @@ func (s *Server) handleRecursiveList(w http.ResponseWriter, r *http.Request, rel
 		if r.Context().Err() != nil {
 			return
 		}
+		if errors.Is(err, errTooManyEntries) {
+			http.Error(w, "too many files below this folder for a recursive listing", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "cannot read directory", http.StatusNotFound)
 		return
 	}
@@ -42,7 +53,8 @@ func (s *Server) handleRecursiveList(w http.ResponseWriter, r *http.Request, rel
 // is returned; failures below it skip only the affected entry or subtree.
 // Each directory contributes its files before its subdirectories, both in
 // natural name order. The cache directory and anything inside it are never
-// listed, whether requested directly or reached during the walk.
+// listed, whether requested directly or reached during the walk. More than
+// maxRecursiveEntries media files fail the whole listing with errTooManyEntries.
 func (s *Server) listRecursive(ctx context.Context, rel, abs string) ([]Entry, error) {
 	cacheRoot := s.realCacheRoot()
 	entries := make([]Entry, 0)
@@ -88,6 +100,9 @@ func (s *Server) listRecursive(ctx context.Context, rel, abs string) ([]Entry, e
 			info, err := item.Info()
 			if err != nil || !info.Mode().IsRegular() {
 				continue
+			}
+			if len(entries) == maxRecursiveEntries {
+				return errTooManyEntries
 			}
 			entries = append(entries, mediaEntry(item.Name(), filepath.ToSlash(filepath.Join(rel, item.Name())), kind, info, metadata))
 		}

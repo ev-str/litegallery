@@ -163,6 +163,30 @@ export function neighbourIndex(layout, index, key) {
   }
 }
 
+/**
+ * Element whose centre lies nearest in the arrow's direction, by on-screen position
+ * (TV remotes); null when no candidate lies that way.
+ * @param {Element} from @param {Iterable<Element>} candidates @param {string} key
+ * @returns {HTMLElement | null}
+ */
+export function nearestInDirection(from, candidates, key) {
+  const direction = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[key];
+  if (!direction) return null;
+  const origin = from.getBoundingClientRect();
+  let best = /** @type {HTMLElement | null} */ (null);
+  let bestScore = Infinity;
+  for (const candidate of candidates) {
+    if (candidate === from) continue;
+    const rect = candidate.getBoundingClientRect();
+    const dx = rect.left + rect.width / 2 - (origin.left + origin.width / 2);
+    const dy = rect.top + rect.height / 2 - (origin.top + origin.height / 2);
+    if (dx * direction[0] + dy * direction[1] <= 1) continue;
+    const score = Math.abs(direction[0] ? dx : dy) + Math.abs(direction[0] ? dy : dx) * 2.5;
+    if (score < bestScore) [best, bestScore] = [/** @type {HTMLElement} */ (candidate), score];
+  }
+  return best;
+}
+
 /** First n in [0, length) for which test(n) holds, or length; test must be monotonic. @param {number} length @param {(n: number) => boolean} test */
 function bisect(length, test) {
   let low = 0;
@@ -489,7 +513,6 @@ export function createMediaWindow({grid, createCard, viewportTop = () => 0, onCh
     grid.style.paddingTop = '';
     grid.style.paddingBottom = '';
     grid.classList.remove('is-grouped');
-    grid.setAttribute('aria-live', 'polite');
     if (stickyHeading) stickyHeading.hidden = true;
   }
 
@@ -510,7 +533,6 @@ export function createMediaWindow({grid, createCard, viewportTop = () => 0, onCh
       if (groups) grid.classList.add('is-grouped');
       indexByPath = new Map(list.map((item, index) => [item.path, index]));
       windowed = list.length > minItems;
-      grid.setAttribute('aria-live', windowed ? 'off' : 'polite');
       measure();
       follow();
       sync();

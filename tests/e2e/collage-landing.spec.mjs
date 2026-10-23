@@ -1,5 +1,5 @@
 import {test, expect} from '@playwright/test';
-import {editor, isDesktopBrowserProject, openAlbum, openCollageLanding, readDownload, saveJsonProject, selectPhotos, startCollage} from './helpers.mjs';
+import {clickHeaderControl, editor, galleryView, isDesktopBrowserProject, openAlbum, openCollageLanding, readDownload, saveJsonProject, selectPhotos, startCollage} from './helpers.mjs';
 
 const landing = page => page.locator('#collageSurface');
 const createCard = page => page.locator('#collageCreate');
@@ -76,7 +76,7 @@ test.describe('collage landing', () => {
     // Entries are routed from the whole header, including the separate status icon;
     // other header controls keep the current surface.
     await expect(page.locator('#statusMode')).toHaveAttribute('data-surface-entry', 'status');
-    await page.locator('#statusMode').click();
+    await clickHeaderControl(page, '#statusMode');
     await expect(page.locator('body')).toHaveAttribute('data-surface', 'status');
     await expect(page.locator('#statusSurface')).toBeVisible();
     await openCollageLanding(page);
@@ -84,7 +84,7 @@ test.describe('collage landing', () => {
     await page.locator('#galleryMode').click();
     await expect(page.locator('#gallerySurface')).toBeVisible();
     await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(13);
-    await page.locator('#gridDensity [data-density-step="0"]').click();
+    await clickHeaderControl(page, '#gridDensity [data-density-step="0"]');
     await page.locator('#tvMode').dispatchEvent('click');
     await page.evaluate(() => document.exitFullscreen());
     await expect(page.locator('#viewer')).not.toHaveAttribute('data-tv');
@@ -202,21 +202,11 @@ test.describe('collage landing', () => {
     await page.locator('#mediaFilter [data-filter="image"]').click();
     await page.locator('#mediaSort').selectOption('name');
     await page.locator('#mediaDirection').click();
-    await page.locator('#gridDensity [data-density-step="0"]').click();
+    await clickHeaderControl(page, '#gridDensity [data-density-step="0"]');
     const target = page.getByRole('button', {name: 'Открыть Photo 07.png'});
     await target.evaluate(element => scrollTo({top: element.getBoundingClientRect().top + scrollY - innerHeight / 2, behavior: 'instant'}));
     await target.focus();
-    const snapshot = () => page.evaluate(() => ({
-      url: location.pathname + location.search,
-      recursive: document.querySelector('#recursiveToggle')?.getAttribute('aria-pressed'),
-      filter: document.querySelector('#mediaFilter [aria-pressed="true"]')?.getAttribute('data-filter'),
-      sort: /** @type {HTMLSelectElement} */ (document.querySelector('#mediaSort')).value,
-      direction: document.querySelector('#mediaDirection')?.getAttribute('aria-label'),
-      columns: document.body.dataset.gridColumns,
-      scroll: Math.round(scrollY),
-      focus: document.activeElement?.getAttribute('data-path'),
-    }));
-    const before = await snapshot();
+    const before = await galleryView(page);
     expect(before.scroll).toBeGreaterThan(200);
     expect(before.focus).toBe('Album A/Photo 07.png');
 
@@ -225,7 +215,7 @@ test.describe('collage landing', () => {
     await openCollageLanding(page);
     await page.locator('#galleryMode').click();
     await expect(page.locator('#gallerySurface')).toBeVisible();
-    const after = await snapshot();
+    const after = await galleryView(page);
     expect({...after, scroll: 0}).toEqual({...before, scroll: 0});
     expect(Math.abs(after.scroll - before.scroll)).toBeLessThanOrEqual(2);
 
@@ -233,7 +223,7 @@ test.describe('collage landing', () => {
     await openCollageLanding(page);
     await createCard(page).click();
     await expect(page.locator('#collageSelection')).toBeVisible();
-    const selecting = await snapshot();
+    const selecting = await galleryView(page);
     expect(Math.abs(selecting.scroll - before.scroll)).toBeLessThanOrEqual(2);
     expect(selecting.focus).toBe(before.focus);
     expect(listings).toEqual([]);

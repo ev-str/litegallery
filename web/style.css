@@ -55,6 +55,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button > .icon + span { margin-left: .4em; }
 
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
+/* The phone folds the gallery controls into the ⋯ menu; wider screens show them in the row. */
+.topbar-menu { display: contents; }
+#topbarMore, .phone-icon { display: none; }
 
 .collage-entry-button {
   min-height: var(--control-height);
@@ -941,9 +944,17 @@ main {
 
 @media (max-width: 700px) {
   :root { --header-height: 58px; --grid-gap: 6px; --tile-radius: 12px; --date-heading-height: 30px; }
-  .topbar { grid-template-columns: minmax(88px, 1fr) minmax(0, 2fr); gap: 8px; padding: 8px 10px; overflow: hidden; }
-  .topbar-actions { min-width: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-  .topbar-actions::-webkit-scrollbar { display: none; }
+  .topbar { grid-template-columns: minmax(88px, 1fr) auto; gap: 8px; padding: 8px 10px; }
+  .topbar-actions { position: relative; gap: 6px; }
+  #topbarMore { display: inline-block; }
+  .phone-icon { display: inline-block; }
+  .topbar-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; display: none; flex-direction: column; align-items: stretch; gap: 4px; min-width: 210px; padding: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 34px rgba(74, 54, 37, .16); }
+  .topbar-menu.is-open { display: flex; }
+  .topbar-menu > .icon-button:not([hidden]) { display: flex; align-items: center; gap: 10px; font-size: 1rem; text-align: left; }
+  .topbar-menu > .icon-button::after { content: attr(aria-label); font-size: .92rem; }
+  .topbar-menu > .density-segments { justify-content: space-between; }
+  body:not([data-surface="gallery"]) .topbar-menu > .gallery-control { display: none; }
+  body[data-surface="search"] .topbar-menu > #tvMode { display: flex; }
   body:not([data-surface="gallery"]) .topbar { grid-template-columns: 0 minmax(0, 1fr); }
   .density-segments button { min-width: 30px; padding-inline: 6px; }
   .collage-entry-button { padding-inline: 10px; }

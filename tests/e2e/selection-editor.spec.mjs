@@ -75,3 +75,13 @@ test('single-folder tree shows one active folder and the same source can fill an
   expect(new Set(placements.map(item => item.id)).size).toBe(3);
   expect(placements.filter(item => item.sourceId === 'source:Album%20A%2FPhoto%2001.png')).toHaveLength(2);
 });
+
+test('Backspace inside the editor edits the title and keeps the folder behind it', async ({page}) => {
+  await startCollage(page, 2);
+  const title = editor(page).locator('[data-project-name]');
+  await title.fill('Пироги');
+  await title.press('Backspace');
+  await expect(title).toHaveValue('Пирог');
+  await expect(page).toHaveURL(/path=Album(\+|%20)A/);
+  await expect(page.locator('#breadcrumbs')).toContainText('Album A');
+});

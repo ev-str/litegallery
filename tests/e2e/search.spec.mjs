@@ -1,10 +1,9 @@
 import {test, expect} from '@playwright/test';
 import {WINDOW_MIN_ITEMS} from '../../web/media-window.js';
+import {clickHeaderControl, directory, galleryView, listing, mockListings, stubMedia} from './helpers.mjs';
 
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const BASE_TIME = 1_760_000_000;
 
-const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
 const file = (path, hour, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 1000 + hour, modTime: '2026-01-15T12:00:00Z', sortTime: BASE_TIME + hour * 3600});
 
 // "Paris" and "Rome" appear only in subfolder names; "sea" in names at every level.
@@ -29,18 +28,8 @@ const LISTINGS = {
 
 /** Synthetic library; every listing request is recorded as `path` or `path?recursive`. */
 async function mockLibrary(page) {
-  const requests = [];
-  await page.route(url => url.pathname === '/api/list', route => {
-    const params = new URL(route.request().url()).searchParams;
-    const path = params.get('path') ?? '';
-    const key = params.has('recursive') ? `${path}?recursive` : path;
-    requests.push(key);
-    return route.fulfill({json: {path: path || '.', title: 'E2E Gallery', entries: LISTINGS[key] ?? []}}).catch(() => {});
-  });
-  await page.route(url => ['/api/thumb', '/api/video-poster', '/api/cover', '/api/media', '/api/image-info'].includes(url.pathname), route => {
-    if (new URL(route.request().url()).pathname === '/api/image-info') return route.fulfill({json: {width: 640, height: 900}});
-    return route.fulfill({contentType: 'image/png', body: ONE_PIXEL_PNG});
-  });
+  const {requests} = await mockListings(page, (key, path) => listing(path, LISTINGS[key] ?? []));
+  await stubMedia(page);
   return requests;
 }
 
@@ -69,17 +58,6 @@ async function openSearch(page) {
   await expect(page.locator('#searchSurface')).toBeVisible();
   await expect(field(page)).toBeFocused();
 }
-
-const snapshot = page => page.evaluate(() => ({
-  url: location.pathname + location.search,
-  recursive: document.querySelector('#recursiveToggle')?.getAttribute('aria-pressed'),
-  filter: document.querySelector('#mediaFilter [aria-pressed="true"]')?.getAttribute('data-filter'),
-  sort: /** @type {HTMLSelectElement} */ (document.querySelector('#mediaSort')).value,
-  direction: document.querySelector('#mediaDirection')?.getAttribute('aria-label'),
-  columns: document.body.dataset.gridColumns,
-  scroll: Math.round(scrollY),
-  focus: document.activeElement?.getAttribute('data-path'),
-}));
 
 test.describe('Найти', () => {
   test('searches file names of the shown listing, ignoring case and spaces, without a request', {tag: '@essential'}, async ({page}) => {
@@ -169,7 +147,7 @@ test.describe('Найти', () => {
 
     // Header TV plays the results from the first one.
     await expect(page.locator('#tvMode')).toBeEnabled();
-    await page.locator('#tvMode').click();
+    await clickHeaderControl(page, '#tvMode');
     await expect(caption(page)).toHaveText('louvre.png · 1/2');
     await page.evaluate(() => document.exitFullscreen());
     await expect(viewer(page)).not.toHaveAttribute('data-tv');
@@ -183,7 +161,7 @@ test.describe('Найти', () => {
     await openTrip(page);
     const tv = page.locator('#tvMode');
     const playFromTV = async expected => {
-      await tv.click();
+      await clickHeaderControl(page, '#tvMode');
       await expect(viewer(page)).toBeVisible();
       await expect(caption(page)).toHaveText(expected);
       await page.evaluate(() => document.exitFullscreen());
@@ -203,7 +181,7 @@ test.describe('Найти', () => {
     await page.locator('#mediaFilter [data-filter="image"]').click();
     await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
     await expect(tv).toBeEnabled();
-    await page.locator('#refresh').click();
+    await clickHeaderControl(page, '#refresh');
     await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
     await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
     await expect(tv).toBeEnabled();
@@ -227,11 +205,11 @@ test.describe('Найти', () => {
     await openTrip(page, {recursive: true});
     await page.locator('#mediaFilter [data-filter="image"]').click();
     await page.locator('#mediaSort').selectOption('name');
-    await page.locator('#gridDensity [data-density-step="0"]').click();
+    await clickHeaderControl(page, '#gridDensity [data-density-step="0"]');
     const target = page.locator('#mediaGrid .media-card[data-path="Trip/Day 3/Photo 030.jpg"]');
     await target.evaluate(element => scrollTo({top: element.getBoundingClientRect().top + scrollY - innerHeight / 2, behavior: 'instant'}));
     await target.focus();
-    const before = await snapshot(page);
+    const before = await galleryView(page);
     expect(before.scroll).toBeGreaterThan(200);
     requests.length = 0;
 
@@ -240,7 +218,7 @@ test.describe('Найти', () => {
     await expect(results(page)).toHaveCount(10);
     await page.locator('#galleryMode').click();
     await expect(page.locator('#gallerySurface')).toBeVisible();
-    const after = await snapshot(page);
+    const after = await galleryView(page);
     expect({...after, scroll: 0}).toEqual({...before, scroll: 0});
     expect(Math.abs(after.scroll - before.scroll)).toBeLessThanOrEqual(2);
     expect(requests).toEqual([]);
@@ -252,7 +230,7 @@ test.describe('Найти', () => {
     await expect(page.getByRole('button', {name: 'Открыть папку Trip'})).toBeVisible();
     await page.goForward();
     await expect(page.locator('#mediaGrid .media-card')).toHaveCount(TRIP_FILES.length - 3);
-    const forward = await snapshot(page);
+    const forward = await galleryView(page);
     expect({...forward, scroll: 0}).toEqual({...before, scroll: 0});
     await openSearch(page);
     await expect(field(page)).toHaveValue('photo 01');

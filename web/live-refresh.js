@@ -18,7 +18,7 @@ export const LIVE_REFRESH_MS = 45_000;
  *   check runs one background check and must change nothing once its signal aborts; a
  *   rejection only ends that check. canCheck is false while a check would disturb the
  *   page (a load in progress, the collage editor); that tick is skipped, not retried
- *   early. While isHidden is true no check starts and no timer runs; `hidden()` aborts
+ *   early, unless `resume()` comes first. While isHidden is true no check starts and no timer runs; `hidden()` aborts
  *   the running check and `visible()` then runs one check, right after the aborted one
  *   has settled.
  */
@@ -30,6 +30,8 @@ export function createRefreshLoop({check, canCheck = () => true, isHidden = () =
   let wasHidden = false;
   /** `visible()` came while a check was still settling; run one more as soon as it ends. */
   let again = false;
+  /** A tick was skipped because canCheck was false; `resume()` makes up for it. */
+  let missed = false;
   /** @type {any} */
   let handle = null;
 
@@ -51,7 +53,11 @@ export function createRefreshLoop({check, canCheck = () => true, isHidden = () =
   async function run() {
     clear();
     if (!started || running || isHidden()) return;
-    if (!canCheck()) return schedule();
+    if (!canCheck()) {
+      missed = true;
+      return schedule();
+    }
+    missed = false;
     const controller = new AbortController();
     running = controller;
     try {
@@ -82,6 +88,10 @@ export function createRefreshLoop({check, canCheck = () => true, isHidden = () =
     },
     /** Count the interval from now, e.g. after the page was loaded in full. */
     restart: schedule,
+    /** The page may be checked again, e.g. the gallery is back on screen: check now if a tick was skipped meanwhile. */
+    resume() {
+      if (missed && !running) run();
+    },
     /** Abort the running check, e.g. because a full load replaces it; that load also replaces a pending re-check. */
     abort() {
       again = false;

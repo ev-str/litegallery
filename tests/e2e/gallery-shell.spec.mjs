@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {formatBytes, formatFileDetails} from '../../web/format.js';
-import {isDesktopBrowserProject, openAlbum} from './helpers.mjs';
+import {clickHeaderControl, directory, focusWithKeyboard, isDesktopBrowserProject, ONE_PIXEL_PNG, openAlbum, stubMedia} from './helpers.mjs';
 
 const DESKTOP_DENSITY = [3, 5, 7];
 const PHONE_DENSITY = [1, 2, 3];
@@ -19,7 +19,7 @@ async function expectDensity(page, choices, grid = '#mediaGrid') {
   const density = page.locator('#gridDensity');
   await expect(density.locator('button')).toHaveText(choices.map(String));
   for (const columns of choices) {
-    await density.locator(`[data-columns="${columns}"]`).click();
+    await clickHeaderControl(page, `#gridDensity [data-columns="${columns}"]`);
     await expect(density.locator(`[data-columns="${columns}"]`)).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => renderedColumns(page, grid), `${columns} columns`).toBe(columns);
     const tracks = await page.locator(grid).evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
@@ -27,21 +27,11 @@ async function expectDensity(page, choices, grid = '#mediaGrid') {
   }
 }
 
-// Safari's Tab skips buttons by default; WebKit falls back to focus after a key press.
-async function focusWithKeyboard(page, locator) {
-  for (let step = 0; step < 40; step += 1) {
-    if (await locator.evaluate(element => element === document.activeElement)) return;
-    await page.keyboard.press('Tab');
-  }
-  await page.keyboard.press('Shift');
-  await locator.focus();
-}
-
 test('fixed grid switches density, keeps it after reload, and per device class', {tag: '@essential'}, async ({page}, testInfo) => {
   test.skip(!isDesktopBrowserProject(testInfo), 'Desktop density contract; the phone class is emulated below.');
   await openAlbum(page);
   await expectDensity(page, DESKTOP_DENSITY);
-  await page.locator('#gridDensity [data-columns="3"]').click();
+  await clickHeaderControl(page, '#gridDensity [data-columns="3"]');
   await page.reload();
   await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(13);
   await expect(page.locator('#gridDensity [data-columns="3"]')).toHaveAttribute('aria-pressed', 'true');
@@ -49,7 +39,7 @@ test('fixed grid switches density, keeps it after reload, and per device class',
 
   await page.setViewportSize(PHONE_VIEWPORT);
   await expectDensity(page, PHONE_DENSITY);
-  await page.locator('#gridDensity [data-columns="1"]').click();
+  await clickHeaderControl(page, '#gridDensity [data-columns="1"]');
   await page.reload();
   await expect(page.locator('#gridDensity [data-columns="1"]')).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => renderedColumns(page)).toBe(1);
@@ -176,7 +166,7 @@ test('header keeps refresh, filters, sorting, and the EXIF panel shows format an
   expect(new Set(heights).size).toBe(1);
 
   const listRequest = page.waitForRequest(request => request.url().includes('/api/list?path=Album%20A'));
-  await page.locator('#refresh').click();
+  await clickHeaderControl(page, '#refresh');
   await listRequest;
   await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(13);
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
@@ -202,7 +192,6 @@ test('header keeps refresh, filters, sorting, and the EXIF panel shows format an
 });
 
 const isPhone = testInfo => testInfo.project.use.viewport.width <= 700;
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 /** Serve fixed listings for the given paths; other listings reach the server. */
 async function routeListings(page, listings) {
@@ -213,7 +202,6 @@ async function routeListings(page, listings) {
   });
 }
 
-const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
 const video = (path, sortTime) => ({name: path.split('/').pop(), path, kind: 'video', size: 5_000_000, modTime: '2026-01-15T12:00:00Z', sortTime});
 const dateLabel = seconds => new Intl.DateTimeFormat('ru', {day: 'numeric', month: 'short', year: 'numeric'}).format(new Date(seconds * 1000));
 
@@ -235,7 +223,7 @@ test('refresh during navigation repeats the requested path and the latest respon
   await page.route(url => url.pathname === '/api/list', route => { held.push(route); });
   await albumA.click();
   await expect.poll(() => held.length).toBe(1);
-  await page.locator('#refresh').click();
+  await clickHeaderControl(page, '#refresh');
   await expect.poll(() => held.length).toBe(2);
   const [stale, latest] = held;
   expect(held.map(route => new URL(route.request().url()).searchParams.get('path'))).toEqual(['Album A', 'Album A']);
@@ -279,7 +267,7 @@ test('refresh after a failed navigation retries the failed path', async ({page})
   await expect(page.locator('#status')).toHaveText('Каталог недоступен');
   await expect(page).not.toHaveURL(/path=/);
 
-  await page.locator('#refresh').click();
+  await clickHeaderControl(page, '#refresh');
   await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(4);
   expect(requested).toEqual(['Album B', 'Album B']);
   await expect(page.locator('#breadcrumbs button')).toHaveText(['Все фото', 'Album B']);
@@ -353,4 +341,66 @@ test('a video whose poster cannot be generated shows no-preview and still opens'
   await card.click();
   await expect(page.locator('#viewer')).toBeVisible();
   await expect(page.locator('#viewer .caption')).toContainText('Missing.mp4');
+});
+
+test('on a phone the header fits and the gallery controls sit in the ⋯ menu', async ({page}, testInfo) => {
+  test.skip(!testInfo.project.use.isMobile, 'Phone header.');
+  await openAlbum(page);
+  const actions = page.locator('.topbar-actions');
+  expect(await actions.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const more = page.getByRole('button', {name: 'Ещё'});
+  await expect(page.locator('#refresh')).toBeHidden();
+
+  await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  for (const control of ['#gridDensity', '#tvMode', '#refresh', '#statusMode']) await expect(page.locator(control)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await expect(more).toBeFocused();
+  await expect(page).toHaveURL(/path=Album(\+|%20)A/);
+
+  await more.click();
+  await page.locator('#refresh').click();
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
+
+  // A section entry in the menu opens its section and closes the menu.
+  await more.click();
+  await page.locator('#statusMode').click();
+  await expect(page.locator('#statusSurface')).toBeVisible();
+  await expect(page.locator('body')).toHaveAttribute('data-surface', 'status');
+  await expect(page.locator('#topbarMenu')).toBeHidden();
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+
+  // Back in Галерея the menu opens again with the gallery controls.
+  await page.locator('#galleryMode').click();
+  await expect(page.locator('body')).toHaveAttribute('data-surface', 'gallery');
+  await more.click();
+  await expect(more).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#refresh')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(more).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#refresh')).toBeHidden();
+});
+
+test('Backspace on a focused select keeps the nested folder', async ({page}) => {
+  const photo = path => ({name: path.split('/').pop(), path, kind: 'image', size: 1000, modTime: '2026-01-15T12:00:00Z', sortTime: 1_760_000_000});
+  await routeListings(page, {Trip: [directory('Trip/Day 1')], 'Trip/Day 1': [photo('Trip/Day 1/a.jpg'), photo('Trip/Day 1/b.jpg')]});
+  await stubMedia(page);
+  await page.goto('/?path=Trip%2FDay%201');
+  await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
+  await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
+  const url = page.url();
+  const crumbs = await page.locator('#breadcrumbs').textContent();
+  const listings = [];
+  page.on('request', request => { if (request.url().includes('/api/list')) listings.push(request.url()); });
+
+  await page.locator('#mediaSort').focus();
+  await page.keyboard.press('Backspace');
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+  expect(page.url()).toBe(url);
+  await expect(page.locator('#breadcrumbs')).toHaveText(crumbs);
+  await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
+  await expect(page.locator('#mediaSort')).toBeFocused();
+  expect(listings).toEqual([]);
 });

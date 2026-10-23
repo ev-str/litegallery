@@ -1,3 +1,4 @@
+// @ts-check
 import {apiURL} from './format.js';
 import {createLoadQueue} from './load-queue.js';
 
@@ -14,6 +15,7 @@ const previews = createPosterGenerator({queue: previewQueue, generate: createVid
 
 /**
  * `onFailure` runs when the poster cannot be generated, now or in an earlier attempt.
+ * @param {VideoItem} item @param {HTMLImageElement} poster @param {() => void} [onFailure]
  * @param {VideoWorkOptions} [options]
  */
 export function queueVideoPreview(item, poster, onFailure = () => {}, options = {}) {
@@ -105,7 +107,7 @@ export function wakeVideoWork() {
   durationQueue.wake();
 }
 
-/** Render, upload, and return the ready URL of a poster. */
+/** Render, upload, and return the ready URL of a poster. @param {VideoItem} item */
 async function createVideoPreview(item) {
   const version = `${item.modTime}-${item.size}`;
   const video = document.createElement('video');
@@ -119,7 +121,7 @@ async function createVideoPreview(item) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
     canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d')).drawImage(video, 0, 0, canvas.width, canvas.height);
     const jpeg = await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('cannot encode poster')), 'image/jpeg', .82));
     const response = await fetch(apiURL('/api/video-poster', item.path, version), {
       method: 'PUT',
@@ -134,9 +136,11 @@ async function createVideoPreview(item) {
   }
 }
 
+/** @param {HTMLVideoElement} video @returns {Promise<void>} */
 function waitForVideoFrame(video) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => finish(new Error('video preview timeout')), 15000);
+    /** @param {Error} [error] */
     const finish = error => {
       clearTimeout(timeout);
       video.removeEventListener('loadeddata', loaded);
@@ -158,6 +162,7 @@ const durations = new Map();
 
 /**
  * Call `onDuration(seconds)` once the duration of a video is known.
+ * @param {VideoItem} item @param {(seconds: number) => void} onDuration
  * @param {AbortSignal} [signal] aborted when the card leaves the grid
  * @param {() => number} [priority] queue priority, see load-queue.js
  */
@@ -180,6 +185,7 @@ export function queueVideoDuration(item, onDuration, signal, priority) {
   }, {signal, priority});
 }
 
+/** @param {VideoItem} item @param {AbortSignal} [signal] @returns {Promise<number>} */
 function readVideoDuration(item, signal) {
   const video = document.createElement('video');
   video.muted = true;
@@ -188,6 +194,7 @@ function readVideoDuration(item, signal) {
     const timeout = setTimeout(() => finish(new Error('video metadata timeout')), 10000);
     let done = false;
     const abort = () => finish(new Error('video metadata aborted'));
+    /** @param {Error} [error] */
     const finish = error => {
       if (done) return;
       done = true;

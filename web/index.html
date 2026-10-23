@@ -41,6 +41,8 @@
     <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
     <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
     <symbol id="icon-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+    <symbol id="icon-collage" viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="18" rx="1.5"/><rect x="15" y="3" width="6" height="8" rx="1.5"/><rect x="15" y="13" width="6" height="8" rx="1.5"/></symbol>
+    <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
     <symbol id="icon-image-off" viewBox="0 0 24 24"><path d="m3 3 18 18M10.4 5H19a2 2 0 0 1 2 2v8.6M19 21H5a2 2 0 0 1-2-2V7c0-.7.4-1.4 1-1.7M21 17l-4.5-4.5M3 16l5-5 7 7"/></symbol>
   </svg>
   <header class="topbar">
@@ -50,17 +52,20 @@
       <div id="appSections" class="app-sections" role="navigation" aria-label="Разделы">
         <button id="galleryMode" class="collage-entry-button" type="button" data-surface-entry="gallery" aria-label="Галерея" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-grid"></use></svg><span class="surface-label">Галерея</span></button>
         <button id="searchMode" class="collage-entry-button" type="button" data-surface-entry="search" aria-label="Найти" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-search"></use></svg><span class="surface-label">Найти</span></button>
-        <button id="memoriesMode" class="collage-entry-button" type="button" data-surface-entry="memories" hidden>Воспоминания</button>
-        <button id="collageMode" class="collage-entry-button" type="button" data-surface-entry="collage" hidden>Коллаж</button>
+        <button id="memoriesMode" class="collage-entry-button" type="button" data-surface-entry="memories" aria-label="Воспоминания" hidden><svg class="icon phone-icon" aria-hidden="true" focusable="false"><use href="#icon-calendar"></use></svg><span class="surface-label">Воспоминания</span></button>
+        <button id="collageMode" class="collage-entry-button" type="button" data-surface-entry="collage" aria-label="Коллаж" hidden><svg class="icon phone-icon" aria-hidden="true" focusable="false"><use href="#icon-collage"></use></svg><span class="surface-label">Коллаж</span></button>
       </div>
-      <div id="gridDensity" class="density-segments gallery-control" role="group" aria-label="Колонок в сетке">
-        <button type="button" data-density-step="0"></button>
-        <button type="button" data-density-step="1"></button>
-        <button type="button" data-density-step="2"></button>
+      <button id="topbarMore" class="icon-button" type="button" title="Ещё" aria-label="Ещё" aria-expanded="false" aria-controls="topbarMenu"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-more"></use></svg></button>
+      <div id="topbarMenu" class="topbar-menu">
+        <div id="gridDensity" class="density-segments gallery-control" role="group" aria-label="Колонок в сетке">
+          <button type="button" data-density-step="0"></button>
+          <button type="button" data-density-step="1"></button>
+          <button type="button" data-density-step="2"></button>
+        </div>
+        <button id="tvMode" class="icon-button gallery-control" type="button" title="Режим TV: показ на весь экран" aria-label="Режим TV" disabled><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-tv"></use></svg></button>
+        <button id="refresh" class="icon-button gallery-control" type="button" title="Обновить" aria-label="Обновить"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg></button>
+        <button id="statusMode" class="icon-button" type="button" data-surface-entry="status" title="Состояние галереи" aria-label="Состояние галереи" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-activity"></use></svg></button>
       </div>
-      <button id="tvMode" class="icon-button gallery-control" type="button" title="Режим TV: показ на весь экран" aria-label="Режим TV" disabled><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-tv"></use></svg></button>
-      <button id="refresh" class="icon-button gallery-control" type="button" title="Обновить" aria-label="Обновить"><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-refresh"></use></svg></button>
-      <button id="statusMode" class="icon-button" type="button" data-surface-entry="status" title="Состояние галереи" aria-label="Состояние галереи" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-activity"></use></svg></button>
     </div>
   </header>
   <main id="gallerySurface" data-surface-panel="gallery">
@@ -80,7 +85,7 @@
           <button id="folderSort" class="sort-button" type="button" aria-label="Изменить порядок папок"></button>
         </div>
       </div>
-      <div id="folders" class="folder-grid" aria-live="polite"></div>
+      <div id="folders" class="folder-grid"></div>
     </section>
     <section id="mediaSection" class="collection-section" hidden>
       <div class="section-heading media-heading">
@@ -112,7 +117,7 @@
         </div>
       </div>
       <div id="mediaGroupHeading" class="media-group-sticky" aria-hidden="true" hidden></div>
-      <div id="mediaGrid" class="media-grid" aria-live="polite"></div>
+      <div id="mediaGrid" class="media-grid"></div>
     </section>
   </main>
   <!-- Sections are registered in app.js; an unregistered one keeps its entry and panel hidden. -->

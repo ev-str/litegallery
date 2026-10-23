@@ -1,8 +1,7 @@
 import {test, expect} from '@playwright/test';
-import {enterSelectionMode} from './helpers.mjs';
+import {clickHeaderControl, directory, enterSelectionMode, listing, mockListings, ONE_PIXEL_PNG, scrollTop} from './helpers.mjs';
 import {WINDOW_MIN_ITEMS} from '../../web/media-window.js';
 
-const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const FOLDER = 'Large';
 const TOTAL = 5000;
 const VIDEO_EVERY = 10;
@@ -29,11 +28,7 @@ const NAME_ASCENDING = ENTRIES.map(item => item.path);
  */
 async function mockLargeLibrary(page, {delay = 0, broken = () => false} = {}) {
   const stats = {thumbs: 0, thumbsInFlight: 0, thumbsPeak: 0, media: 0, mediaInFlight: 0, mediaPeak: 0};
-  await page.route(url => url.pathname === '/api/list', route => {
-    const path = new URL(route.request().url()).searchParams.get('path') ?? '';
-    const entries = path === FOLDER ? ENTRIES : path ? [] : [{name: FOLDER, path: FOLDER, kind: 'directory', modTime: '2026-01-15T12:00:00Z'}];
-    return route.fulfill({json: {path: path || '.', title: 'E2E Gallery', entries}});
-  });
+  await mockListings(page, (key, path) => listing(path, path === FOLDER ? ENTRIES : path ? [] : [directory(FOLDER)]));
   const track = kind => async route => {
     stats[kind]++;
     stats[`${kind}InFlight`]++;
@@ -79,7 +74,6 @@ async function watchErrors(page) {
 
 const cards = page => page.locator('#mediaGrid .media-card');
 const tile = (page, path) => page.locator(`#mediaGrid .media-card[data-path="${path}"]`);
-const scrollTop = page => page.evaluate(() => Math.round(scrollY));
 const nameOf = path => path.split('/').pop();
 const gridColumns = page => page.evaluate(() => getComputedStyle(document.querySelector('#mediaGrid')).gridTemplateColumns.split(' ').length);
 
@@ -106,19 +100,18 @@ async function openLarge(page) {
  * `expected`, and the first of them sits at its own row.
  */
 async function expectWindowOf(page, expected) {
-  const paths = await cards(page).evaluateAll(elements => elements
-    .filter(element => !element.classList.contains('is-window-pinned'))
-    .map(element => element.getAttribute('data-path')));
+  // One snapshot: the window may re-render between two separate reads.
+  const {paths, layout} = await page.evaluate(source => {
+    const {grid, columns, pitch} = new Function(`return (${source})()`)();
+    const rendered = [...grid.querySelectorAll('.media-card:not(.is-window-pinned)')];
+    const offset = rendered.length ? rendered[0].getBoundingClientRect().top - grid.getBoundingClientRect().top : 0;
+    return {paths: rendered.map(element => element.getAttribute('data-path')), layout: {columns, pitch, offset}};
+  }, gridLayout.toString());
   expect(paths.length).toBeGreaterThan(0);
   expect(paths.length).toBeLessThanOrEqual(WINDOW_MIN_ITEMS);
   const start = expected.indexOf(paths[0]);
   expect(start).toBeGreaterThanOrEqual(0);
   expect(paths).toEqual(expected.slice(start, start + paths.length));
-  const layout = await page.evaluate(([source, path]) => {
-    const {grid, columns, pitch} = new Function(`return (${source})()`)();
-    const first = grid.querySelector(`.media-card[data-path="${CSS.escape(path)}"]`);
-    return {columns, pitch, offset: first.getBoundingClientRect().top - grid.getBoundingClientRect().top};
-  }, [gridLayout.toString(), paths[0]]);
   expect(start % layout.columns).toBe(0);
   expect(Math.abs(layout.offset - (start / layout.columns) * layout.pitch)).toBeLessThan(2);
   return {start, count: paths.length, columns: layout.columns};
@@ -305,7 +298,7 @@ test('sort, filter, and density work on the whole folder and keep the position',
     return {path: first.getAttribute('data-path'), y: first.getBoundingClientRect().top};
   });
   const columns = testInfo.project.use.viewport.width <= 700 ? 3 : 7;
-  await page.locator(`#gridDensity [data-columns="${columns}"]`).click();
+  await clickHeaderControl(page, `#gridDensity [data-columns="${columns}"]`);
   await expect(page.locator(`#gridDensity [data-columns="${columns}"]`)).toHaveAttribute('aria-pressed', 'true');
   const after = await tile(page, top.path).boundingBox();
   expect(Math.abs(after.y - top.y)).toBeLessThan(2);

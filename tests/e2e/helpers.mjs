@@ -82,3 +82,77 @@ export async function saveJsonProject(page) {
   expect(download.suggestedFilename()).toMatch(/\.json$/);
   return JSON.parse((await readDownload(download)).toString('utf8'));
 }
+
+export const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+export const directory = path => ({name: path.split('/').pop(), path, kind: 'directory', modTime: '2026-01-15T12:00:00Z'});
+export const scrollTop = page => page.evaluate(() => Math.round(scrollY));
+
+/** The `/api/list` answer for a folder. */
+export const listing = (path, entries) => ({json: {path: path || '.', title: 'E2E Gallery', entries}});
+
+/**
+ * Synthetic `/api/list`. Every request is recorded as `path` or `path?recursive`;
+ * `answer(key, path)` gives its fulfill options when it is sent, and requests
+ * matching `hold` wait until released.
+ */
+export async function mockListings(page, answer) {
+  /** @type {{requests: string[], held: {key: string, release: () => Promise<void>}[], hold: (key: string) => boolean}} */
+  const library = {requests: [], held: [], hold: () => false};
+  await page.route(url => url.pathname === '/api/list', route => {
+    const params = new URL(route.request().url()).searchParams;
+    const path = params.get('path') ?? '';
+    const key = params.has('recursive') ? `${path}?recursive` : path;
+    library.requests.push(key);
+    const fulfill = () => route.fulfill(answer(key, path)).catch(() => {});
+    if (library.hold(key)) {
+      library.held.push({key, release: fulfill});
+      return undefined;
+    }
+    return fulfill();
+  });
+  return library;
+}
+
+/** Media routes answer one PNG; `/api/image-info` answers a fixed size. */
+export async function stubMedia(page, paths = ['/api/thumb', '/api/video-poster', '/api/cover', '/api/media', '/api/image-info']) {
+  await page.route(url => paths.includes(url.pathname), route => {
+    if (new URL(route.request().url()).pathname === '/api/image-info') return route.fulfill({json: {width: 640, height: 900}});
+    return route.fulfill({contentType: 'image/png', body: ONE_PIXEL_PNG});
+  });
+}
+
+/** Address, gallery controls, scroll and focused tile, to compare across surface switches. */
+export const galleryView = page => page.evaluate(() => ({
+  url: location.pathname + location.search,
+  recursive: document.querySelector('#recursiveToggle')?.getAttribute('aria-pressed'),
+  filter: document.querySelector('#mediaFilter [aria-pressed="true"]')?.getAttribute('data-filter'),
+  sort: /** @type {HTMLSelectElement} */ (document.querySelector('#mediaSort')).value,
+  direction: document.querySelector('#mediaDirection')?.getAttribute('aria-label'),
+  group: /** @type {HTMLSelectElement} */ (document.querySelector('#mediaGroup')).value,
+  columns: document.body.dataset.gridColumns,
+  scroll: Math.round(scrollY),
+  focus: document.activeElement?.getAttribute('data-path'),
+}));
+
+/**
+ * Reach a control with real Tab presses. Safari's Tab skips buttons by default,
+ * so WebKit falls back to focus after a key press, which it treats as keyboard
+ * focus; Chromium and Firefox take the Tab path.
+ */
+export async function focusWithKeyboard(page, locator, {steps = 40, fallback = 'Shift'} = {}) {
+  for (let step = 0; step < steps; step += 1) {
+    if (await locator.evaluate(element => element === document.activeElement)) return;
+    await page.keyboard.press('Tab');
+  }
+  await page.keyboard.press(fallback);
+  await locator.focus();
+}
+
+/** Click a header control; on the phone the gallery controls sit in the ⋯ menu, opened first and closed after. */
+export async function clickHeaderControl(page, selector) {
+  const more = page.locator('#topbarMore');
+  const folded = await more.isVisible() && !(await page.locator(selector).isVisible());
+  if (folded) await more.click();
+  await page.locator(selector).click();
+  if (folded && await more.getAttribute('aria-expanded') === 'true') await more.click();
+}

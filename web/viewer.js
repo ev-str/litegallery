@@ -97,7 +97,6 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
     dialog.dataset.idle = 'true';
   }
 
-  /** @param {boolean} [byAutoplay] media that fails while autoplay shows it is skipped */
   /** Keyboard focus on a real control; the dialog, frame, and stage surfaces do not count. */
   function keyboardOnControl() {
     const active = document.activeElement;
@@ -105,6 +104,7 @@ export function createViewer(dialog, {onClose = () => {}} = {}) {
       Boolean(active.closest('button, a, select, input, textarea, video'));
   }
 
+  /** @param {boolean} [byAutoplay] media that fails while autoplay shows it is skipped */
   function showCurrent(byAutoplay = false) {
     if (index < 0 || index >= items.length) return;
     const item = items[index];
