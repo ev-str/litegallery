@@ -1,6 +1,13 @@
-/** Gallery API URL with an optional cache-busting version. */
+// @ts-check
+
+/**
+ * @typedef {{name?: string, kind?: string, size?: number}} FileInfo
+ */
+
+/** Gallery API URL with an optional cache-busting version. @param {string} endpoint @param {string} path */
 export const apiURL = (endpoint, path, version = '') => `${endpoint}?path=${encodeURIComponent(path)}${version ? `&v=${encodeURIComponent(version)}` : ''}`;
 
+/** @param {number | undefined} bytes */
 export function formatBytes(bytes) {
   if (!bytes) return '';
   const units = ['Б', 'КБ', 'МБ', 'ГБ'];
@@ -13,7 +20,7 @@ export function formatBytes(bytes) {
   return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
-/** Russian plural: formatCount(3, ['файл', 'файла', 'файлов']) → '3 файла'. */
+/** Russian plural: formatCount(3, ['файл', 'файла', 'файлов']) → '3 файла'. @param {number} value @param {string[]} forms */
 export function formatCount(value, forms) {
   const mod10 = value % 10;
   const mod100 = value % 100;
@@ -21,24 +28,25 @@ export function formatCount(value, forms) {
   return `${value} ${form}`;
 }
 
+/** @type {Record<string, string>} */
 const imageFormats = {jpg: 'JPEG', jpeg: 'JPEG', png: 'PNG', gif: 'GIF', bmp: 'BMP', tif: 'TIFF', tiff: 'TIFF'};
 
-/** Short file type label: 'JPEG', 'PNG', … for photos, 'Видео' for videos. */
+/** Short file type label: 'JPEG', 'PNG', … for photos, 'Видео' for videos. @param {FileInfo} item */
 export function formatFileType(item) {
   if (item.kind === 'video') return 'Видео';
   const extension = (item.name || '').split('.').pop()?.toLowerCase() || '';
   return imageFormats[extension] || extension.toUpperCase() || 'Фото';
 }
 
-/** Secondary tile line: 'JPEG · 3.1 МБ'. */
+/** Secondary tile line: 'JPEG · 3.1 МБ'. @param {FileInfo} item */
 export const formatFileDetails = item => [formatFileType(item), formatBytes(item.size)].filter(Boolean).join(' · ');
 
 const dateFormatter = new Intl.DateTimeFormat('ru', {day: 'numeric', month: 'short', year: 'numeric'});
 
-/** Capture (or file creation) date from a Unix timestamp in seconds. */
+/** Capture (or file creation) date from a Unix timestamp in seconds. @param {number | undefined} seconds */
 export const formatDate = seconds => (seconds ? dateFormatter.format(new Date(seconds * 1000)) : '');
 
-/** Video duration: '0:42', '12:05', '1:02:09'. */
+/** Video duration: '0:42', '12:05', '1:02:09'. @param {number} seconds */
 export function formatDuration(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return '';
   const total = Math.round(seconds);

@@ -73,7 +73,7 @@ test.describe('collage landing', () => {
     await expect(landing(page).locator('button')).toHaveCount(2);
     await expect(landing(page).getByText('Перетащите сюда файл проекта')).toHaveCount(1);
     // Sections without an implementation show no entry.
-    for (const entry of ['#searchMode', '#memoriesMode', '#statusMode']) await expect(page.locator(entry)).toBeHidden();
+    for (const entry of ['#memoriesMode', '#statusMode']) await expect(page.locator(entry)).toBeHidden();
     for (const panel of ['#searchSurface', '#memoriesSurface', '#statusSurface']) await expect(page.locator(panel)).toBeHidden();
     // Entries are routed from the whole header: the separate status icon is covered, but while
     // unregistered it stays closed even when clicked, and other header controls keep the surface.

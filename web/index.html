@@ -47,7 +47,7 @@
     <div class="topbar-actions">
       <div id="appSections" class="app-sections" role="navigation" aria-label="Разделы">
         <button id="galleryMode" class="collage-entry-button" type="button" data-surface-entry="gallery" aria-label="Галерея" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-grid"></use></svg><span class="surface-label">Галерея</span></button>
-        <button id="searchMode" class="collage-entry-button" type="button" data-surface-entry="search" hidden>Найти</button>
+        <button id="searchMode" class="collage-entry-button" type="button" data-surface-entry="search" aria-label="Найти" hidden><svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-search"></use></svg><span class="surface-label">Найти</span></button>
         <button id="memoriesMode" class="collage-entry-button" type="button" data-surface-entry="memories" hidden>Воспоминания</button>
         <button id="collageMode" class="collage-entry-button" type="button" data-surface-entry="collage" hidden>Коллаж</button>
       </div>
@@ -103,7 +103,23 @@
     </section>
   </main>
   <!-- Sections are registered in app.js; an unregistered one keeps its entry and panel hidden. -->
-  <section id="searchSurface" class="app-surface" data-surface-panel="search" aria-label="Найти" hidden></section>
+  <section id="searchSurface" class="app-surface search-surface" data-surface-panel="search" aria-label="Найти" hidden>
+    <div class="search-bar">
+      <label class="search-label" for="searchInput">Найти</label>
+      <div class="search-field">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-search"></use></svg>
+        <input id="searchInput" type="search" placeholder="Найти" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-describedby="searchScope">
+        <button id="searchClear" class="search-clear" type="button" aria-label="Очистить запрос" hidden></button>
+      </div>
+      <span id="searchCount" class="search-count" role="status"></span>
+    </div>
+    <p id="searchScope" class="search-scope"></p>
+    <div id="searchEmpty" class="gallery-empty" hidden>
+      <strong></strong>
+      <span></span>
+    </div>
+    <div id="searchGrid" class="media-grid" aria-label="Результаты поиска"></div>
+  </section>
   <section id="memoriesSurface" class="app-surface" data-surface-panel="memories" aria-label="Воспоминания" hidden></section>
   <section id="collageSurface" class="app-surface collage-landing" data-surface-panel="collage" aria-labelledby="collageLandingTitle" hidden>
     <h1 id="collageLandingTitle">Коллаж</h1>

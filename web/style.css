@@ -78,6 +78,51 @@ body:not([data-surface="gallery"]) .gallery-control { visibility: hidden; }
   padding: 26px clamp(16px, 4vw, 64px) 80px;
 }
 .app-surface[hidden], main[hidden] { display: none; }
+/* Найти shows its results: TV plays them like the gallery list. */
+body[data-surface="search"] #tvMode { visibility: visible; }
+
+.search-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.search-label { flex: 1 0 100%; font-size: 1.35rem; font-weight: 700; letter-spacing: -.03em; }
+.search-field {
+  flex: 1 1 320px;
+  max-width: 640px;
+  min-height: 48px;
+  padding: 0 6px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+}
+.search-field:focus-within { border-color: var(--accent); outline: 3px solid rgba(187, 118, 84, .22); }
+.search-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 1rem;
+}
+.search-field input::-webkit-search-cancel-button { display: none; }
+.search-clear {
+  min-width: var(--control-height);
+  min-height: var(--control-height);
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+.search-clear[hidden] { display: none; }
+.search-clear:hover, .search-clear:focus-visible { color: var(--ink); background: rgba(87, 68, 51, .08); outline: 3px solid rgba(187, 118, 84, .22); }
+.search-count { color: var(--ink); font-size: .9rem; font-weight: 650; }
+.search-scope { margin: 10px 0 22px; color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
 
 .collage-landing h1 { margin: 0 0 18px; font-size: 1.35rem; letter-spacing: -.03em; }
 .collage-landing-cards {
@@ -846,8 +891,8 @@ main {
   .density-segments button { min-width: 30px; padding-inline: 6px; }
   .collage-entry-button { padding-inline: 10px; }
   .app-sections { gap: 4px; }
-  #galleryMode .surface-label { display: none; }
-  #galleryMode .icon + span { margin-left: 0; }
+  .app-sections .surface-label { display: none; }
+  .app-sections .icon + span { margin-left: 0; }
   .app-surface { padding: 16px 10px 52px; }
   .collage-landing-card { min-height: 150px; padding: 18px; }
   .brand { display: none; }

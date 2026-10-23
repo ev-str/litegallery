@@ -7,6 +7,7 @@ import {iconLabelMarkup, iconMarkup} from './icons.js';
 import {createRefreshLoop} from './live-refresh.js';
 import {createLoadQueue} from './load-queue.js';
 import {createMediaWindow} from './media-window.js';
+import {createSearch, relativeFolder, relativePath} from './search.js';
 import {pauseVideoWork, queueVideoDuration, queueVideoPreview, wakeVideoWork} from './video-posters.js';
 import {createViewer} from './viewer.js';
 
@@ -212,6 +213,26 @@ const mediaWindow = createMediaWindow({
     wakeVideoWork();
   },
 });
+const searchInput = document.querySelector('#searchInput');
+const search = createSearch({
+  panel: document.querySelector('#searchSurface'),
+  input: searchInput,
+  clear: document.querySelector('#searchClear'),
+  count: document.querySelector('#searchCount'),
+  scope: document.querySelector('#searchScope'),
+  empty: document.querySelector('#searchEmpty'),
+  grid: document.querySelector('#searchGrid'),
+  // null while a listing loads; a failed load leaves nothing to search.
+  getItems: () => (state.shownPath !== null ? media : loadController ? null : []),
+  getScope: () => ({folder: state.shownPath ?? state.requestedPath, recursive: state.recursive, filter: state.filter}),
+  createCard: (item, index, work) => createMediaCard(item, index, work, 'search'),
+  viewportTop: () => header.getBoundingClientRect().bottom,
+  onChange: () => {
+    thumbnails.wake();
+    wakeVideoWork();
+  },
+  onResults: syncTvButton,
+});
 
 function sortByName(items, descending) {
   const sorted = [...items].sort((left, right) => nameCollator.compare(left.name, right.name));
@@ -250,6 +271,13 @@ function applyMediaView() {
   const filtered = allMedia.filter(item => state.filter === 'all' || item.kind === state.filter);
   media = sortMedia(filtered);
   renderMedia(media);
+  search.refresh();
+  syncTvButton();
+}
+
+// TV plays the list of the current section: the gallery media, or the results in Найти.
+function syncTvButton() {
+  tvButton.disabled = (surfaces.current === 'search' ? search.results : media).length === 0;
 }
 
 /**
@@ -437,7 +465,6 @@ function renderFolders(items) {
 }
 
 function renderMedia(items) {
-  tvButton.disabled = items.length === 0;
   mediaSection.hidden = allMedia.length === 0;
   mediaCount.textContent = formatCount(items.length, ['файл', 'файла', 'файлов']);
   updateMediaControls();
@@ -455,13 +482,15 @@ function renderMedia(items) {
 /**
  * One media tile; the window creates it when the tile comes near the viewport.
  * @param {{signal: AbortSignal, priority: () => number}} work aborts when the tile leaves the grid
+ * @param {'gallery'|'search'} source grid the tile belongs to; the viewer opens its list
  */
-function createMediaCard(item, index, work) {
+function createMediaCard(item, index, work, source = 'gallery') {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = `media-card gallery-item ${item.kind}`;
   card.dataset.path = item.path;
-  const context = subfolders.get(item.path);
+  // Recursive search results always name their subfolder.
+  const context = source === 'search' && state.recursive ? {relative: relativePath(item, state.path), folder: relativeFolder(item, state.path) || 'Эта папка'} : subfolders.get(item.path);
   card.title = context?.relative ?? item.name;
   if (!selection.decorateCard(card, item)) card.setAttribute('aria-label', `Открыть ${context?.relative ?? item.name}`);
   const version = `${item.modTime}-${item.size}`;
@@ -491,7 +520,7 @@ function createMediaCard(item, index, work) {
   }
   const overlay = document.createElement('span');
   overlay.className = 'media-caption';
-  overlay.id = `media-caption-${index}`;
+  overlay.id = `${source === 'search' ? 'search' : 'media'}-caption-${index}`;
   overlay.innerHTML = '<span class="media-meta"></span><span class="media-details"></span>';
   const primary = overlay.querySelector('.media-meta');
   primary.textContent = formatDate(item.sortTime);
@@ -513,12 +542,13 @@ function createMediaCard(item, index, work) {
   card.append(overlay);
   card.addEventListener('click', () => {
     if (selection.handleCardClick(item, card)) return;
-    const index = media.findIndex(entry => entry.path === item.path);
-    state.lastOpened = {folder: state.path, path: item.path, index};
-    state.saveView(state.path, {focusPath: item.path});
+    const list = source === 'search' ? search.results : media;
+    const index = list.findIndex(entry => entry.path === item.path);
+    state.lastOpened = {folder: state.path, path: item.path, index, source};
+    if (source === 'gallery') state.saveView(state.path, {focusPath: item.path});
     viewerOpener = null;
     pauseGalleryWork(true);
-    viewer.open(media, index);
+    viewer.open(list, index);
   });
   return card;
 }
@@ -624,14 +654,16 @@ function returnFromViewer() {
   const opened = state.lastOpened;
   if (!opened) return;
   const sameFolder = opened.folder === state.shownPath;
-  const tile = sameFolder ? tileFor(opened.path) : null;
-  const neighbour = sameFolder && media.length ? mediaWindow.revealIndex(Math.min(opened.index, media.length - 1)) : null;
-  const target = tile || neighbour || galleryItems()[0] || refreshButton;
+  const fromSearch = opened.source === 'search' && surfaces.current === 'search';
+  const list = fromSearch ? search.results : media;
+  const tile = sameFolder ? (fromSearch ? search.tileFor(opened.path) : tileFor(opened.path)) : null;
+  const neighbour = sameFolder && list.length ? (fromSearch ? search : mediaWindow).revealIndex(Math.min(opened.index, list.length - 1)) : null;
+  const target = tile || neighbour || (fromSearch ? searchInput : galleryItems()[0] || refreshButton);
   target.focus({preventScroll: true});
   // Pointer users get no :focus-visible after a programmatic focus; show the ring anyway.
   target.classList.add('is-return-focus');
   target.addEventListener('blur', () => target.classList.remove('is-return-focus'), {once: true});
-  if (target === refreshButton) return;
+  if (target === refreshButton || target === searchInput) return;
   target.scrollIntoView({block: 'nearest', inline: 'nearest'});
   if (target === tile) flashLastOpened(tile);
 }
@@ -641,12 +673,15 @@ function returnFromViewer() {
 function focusInDirection(key) {
   const active = document.activeElement;
   if (!active?.classList.contains('gallery-item')) return false;
-  const next = active.classList.contains('media-card') ? mediaWindow.neighbour(active, key) : null;
+  const inSearch = search.owns(active);
+  const next = active.classList.contains('media-card') ? (inSearch ? search : mediaWindow).neighbour(active, key) : null;
   if (next) {
     next.focus({preventScroll: true});
     next.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});
     return true;
   }
+  // The search grid holds media cards only: its edge is the end of the move.
+  if (inSearch) return false;
   const cards = [...document.querySelectorAll('.gallery-item:not([hidden])')];
   const from = active.getBoundingClientRect();
   const fx = from.left + from.width / 2;
@@ -723,13 +758,14 @@ history.scrollRestoration = 'manual';
 
 // After an interrupted navigation or a failed load the address catches up.
 refreshButton.onclick = () => load(state.requestedPath, {recursive: state.recursive});
-// TV shows the current selection, filter and sort applied, from its first item. The viewer
-// requests fullscreen synchronously inside this click.
+// TV shows the current selection, filter and sort applied, from its first item; in Найти it
+// shows the results. The viewer requests fullscreen synchronously inside this click.
 tvButton.onclick = () => {
-  if (!media.length || viewer.isOpen) return;
+  const list = surfaces.current === 'search' ? search.results : media;
+  if (!list.length || viewer.isOpen) return;
   viewerOpener = tvButton;
   pauseGalleryWork(true);
-  viewer.openTV(media, 0);
+  viewer.openTV(list, 0);
 };
 recursiveToggle.addEventListener('click', () => load(state.requestedPath, {history: 'replace', recursive: !state.recursive}));
 addEventListener('popstate', () => {
@@ -761,6 +797,7 @@ function leaveGallery() {
 
 function enterGallery() {
   pauseGalleryWork(false);
+  syncTvButton();
   restoreGallery();
 }
 
@@ -774,6 +811,21 @@ function restoreGallery() {
 }
 
 surfaces.register('gallery', {panel: main, entry: galleryEntry, leave: leaveGallery, enter: enterGallery});
+// Найти searches the list on screen: no request, and the gallery keeps its grid, scroll, and focus.
+surfaces.register('search', {
+  panel: document.querySelector('#searchSurface'),
+  entry: document.querySelector('#searchMode'),
+  enter: () => {
+    pauseGalleryWork(false);
+    search.enter();
+    syncTvButton();
+    searchInput.focus({preventScroll: true});
+  },
+  leave: () => {
+    search.leave();
+    pauseGalleryWork(true);
+  },
+});
 surfaces.register('collage', {panel: document.querySelector('#collageSurface'), entry: document.querySelector('#collageMode')});
 // Section entries sit in the text navigation and as separate header icons.
 routeSurfaceEntries(document.querySelector('.topbar-actions'), surfaces);
