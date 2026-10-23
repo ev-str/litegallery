@@ -46,10 +46,16 @@ type warmJob struct {
 	metadataNeeded bool
 }
 
+const (
+	thumbnailReady       = "ready"
+	thumbnailUnavailable = "unavailable"
+)
+
 type warmResult struct {
 	source          string
 	operation       string
 	generated       bool
+	thumbnail       string
 	err             error
 	captured        int64
 	metadataChecked bool
@@ -72,9 +78,32 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 	stamp := filepath.Join(s.cfg.Cache, ".warm-success")
 	if options.MinInterval > 0 {
 		if info, statErr := os.Stat(stamp); statErr == nil && time.Since(info.ModTime()) < options.MinInterval {
-			stats.SkippedRecent = true
-			return stats, nil
+			// Missing or invalid artifacts force a full run that rebuilds them.
+			if s.warmArtifactsReady() {
+				stats.SkippedRecent = true
+				return stats, nil
+			}
 		}
+	}
+
+	status := s.startWarmStatus(started)
+	succeeded := false
+	defer func() {
+		if succeeded {
+			return
+		}
+		state := runFailed
+		if ctx.Err() != nil {
+			state = runCancelled
+		}
+		_ = status.finish(state, stats, nil)
+	}()
+	report := func(operation, path string, err error) {
+		if err == nil {
+			return
+		}
+		status.recordError(operation, path, err)
+		reportWarmError(options, operation, path, err)
 	}
 
 	live := make(map[string]struct{})
@@ -82,6 +111,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 	manifests := make(map[string]metadataManifest)
 	cachedManifests := make(map[string]metadataManifest)
 	scanErrors := 0
+	readyThumbnails, unavailableThumbnails := 0, 0
 	cacheRoot, err := filepath.Abs(s.cfg.Cache)
 	if err != nil {
 		return stats, err
@@ -99,7 +129,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		}
 		if walkErr != nil {
 			scanErrors++
-			reportWarmError(options, "walk", path, walkErr)
+			report("walk", path, walkErr)
 			return nil
 		}
 		if entry.IsDir() && filepath.Clean(path) == cacheRoot {
@@ -121,12 +151,12 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		info, infoErr := entry.Info()
 		if infoErr != nil {
 			scanErrors++
-			reportWarmError(options, "stat", path, infoErr)
+			report("stat", path, infoErr)
 			return nil
 		}
 		if !info.Mode().IsRegular() {
 			scanErrors++
-			reportWarmError(options, "stat", path, errors.New("not a regular file"))
+			report("stat", path, errors.New("not a regular file"))
 			return nil
 		}
 		cached, _ := s.thumbnailCachePath(path, info)
@@ -150,8 +180,12 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		manifests[directory] = manifest
 		live[filepath.Clean(s.metadataManifestPath(directory))] = struct{}{}
 		stats.Media++
+		status.update("scanning", WarmStats{Media: stats.Media, Errors: scanErrors}, -1)
 		if kind == "video" {
 			stats.Videos++
+			if _, posterErr := os.Stat(cached); posterErr == nil {
+				readyThumbnails++
+			}
 			if metadataNeeded {
 				jobs = append(jobs, warmJob{source: path, kind: kind, metadataNeeded: true})
 			}
@@ -165,6 +199,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		return stats, err
 	}
 	stats.Errors += scanErrors
+	status.update("processing", stats, len(jobs))
 	if stats.Media == 0 {
 		return stats, errors.New("no media found; refusing to mark the scan successful or prune the cache")
 	}
@@ -188,14 +223,20 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 					// Video posters remain browser-generated.
 				} else if _, statErr := os.Stat(job.cache); statErr == nil {
 					// The thumbnail is already warm.
+					result.thumbnail = thumbnailReady
 				} else if !errors.Is(statErr, os.ErrNotExist) {
 					result.operation = "cache-stat"
 					result.err = statErr
+					result.thumbnail = thumbnailUnavailable
 				} else {
 					makeErr := makeThumbnail(job.source, job.cache, s.cfg.ThumbSize, s.cfg.MaxImagePixels)
 					result.operation = "thumbnail"
 					result.generated = makeErr == nil
 					result.err = makeErr
+					result.thumbnail = thumbnailReady
+					if makeErr != nil {
+						result.thumbnail = thumbnailUnavailable
+					}
 				}
 				if job.metadataNeeded {
 					if job.kind == "video" {
@@ -233,10 +274,16 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 	}()
 	for result := range results {
 		stats.Processed++
+		switch result.thumbnail {
+		case thumbnailReady:
+			readyThumbnails++
+		case thumbnailUnavailable:
+			unavailableThumbnails++
+		}
 		if result.err != nil {
 			stats.Errors++
 			if !errors.Is(result.err, context.Canceled) {
-				reportWarmError(options, result.operation, result.source, result.err)
+				report(result.operation, result.source, result.err)
 			}
 		} else if !supportsVideoCaptureTime(result.source) && result.generated {
 			stats.Generated++
@@ -245,7 +292,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		}
 		if result.metadataErr != nil {
 			stats.Errors++
-			reportWarmError(options, "metadata", result.source, result.metadataErr)
+			report("metadata", result.source, result.metadataErr)
 		}
 		if result.captured != 0 || result.metadataChecked {
 			directory := filepath.Dir(result.source)
@@ -258,6 +305,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 			manifest.Files[filepath.Base(result.source)] = record
 			manifests[directory] = manifest
 		}
+		status.update("processing", stats, len(jobs))
 		if options.Progress != nil {
 			options.Progress(stats)
 		}
@@ -268,10 +316,11 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 	if scanErrors > 0 {
 		return stats, fmt.Errorf("scan completed with %d filesystem errors; refusing to prune", scanErrors)
 	}
+	status.update("finalizing", stats, len(jobs))
 	for directory, manifest := range manifests {
 		if err := s.writeMetadataManifest(directory, manifest); err != nil {
 			stats.Errors++
-			reportWarmError(options, "metadata-cache", directory, err)
+			report("metadata-cache", directory, err)
 			return stats, fmt.Errorf("write metadata cache for %q: %w", directory, err)
 		}
 	}
@@ -281,6 +330,26 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		if err != nil {
 			return stats, err
 		}
+	}
+	scanned := time.Now()
+	if err := s.writeDateIndex(s.buildDateIndex(manifests, scanned)); err != nil {
+		stats.Errors++
+		report("date-index", "", err)
+		return stats, fmt.Errorf("write date index: %w", err)
+	}
+	cache := &CacheStatus{
+		MediaFiles:            stats.Media,
+		Images:                stats.Images,
+		Videos:                stats.Videos,
+		ReadyThumbnails:       readyThumbnails,
+		MissingThumbnails:     stats.Media - readyThumbnails - unavailableThumbnails,
+		UnavailableThumbnails: unavailableThumbnails,
+		SizeBytes:             cacheSizeBytes(s.cfg.Cache),
+		LastFullScanAt:        statusTime(scanned),
+	}
+	succeeded = true
+	if err := status.finish(runSucceeded, stats, cache); err != nil {
+		return stats, fmt.Errorf("write warm status: %w", err)
 	}
 	if err := writeWarmStamp(stamp); err != nil {
 		return stats, err
