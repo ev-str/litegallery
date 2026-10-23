@@ -20,6 +20,7 @@
     "web/collage-landing.js",
     "web/collage/**/*.js",
     "web/format.js",
+    "web/gallery-status.js",
     "web/live-refresh.js",
     "web/memories.js",
     "web/load-queue.js",

@@ -2,6 +2,7 @@ import {createSurfaces, routeSurfaceEntries} from './app-surfaces.js';
 import {createCollageLanding} from './collage-landing.js';
 import {createCollageSelection} from './collage-selection.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
+import {createGalleryStatus} from './gallery-status.js';
 import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
 import {createRefreshLoop} from './live-refresh.js';
@@ -842,6 +843,8 @@ const memories = createMemories({
     else viewer.open(items, 0);
   },
 });
+const galleryStatus = createGalleryStatus({panel: document.querySelector('#statusSurface')});
+surfaces.register('status', {panel: galleryStatus.panel, entry: document.querySelector('#statusMode'), enter: galleryStatus.enter, leave: galleryStatus.leave});
 // Section entries sit in the text navigation and as separate header icons.
 routeSurfaceEntries(document.querySelector('.topbar-actions'), surfaces);
 
