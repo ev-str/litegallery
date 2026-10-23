@@ -21,6 +21,7 @@
     "web/collage/**/*.js",
     "web/format.js",
     "web/live-refresh.js",
+    "web/memories.js",
     "web/load-queue.js",
     "web/media-window.js",
     "web/search.js",

@@ -4,7 +4,7 @@
  * @typedef {{name?: string, kind?: string, size?: number}} FileInfo
  */
 
-/** Gallery API URL with an optional cache-busting version. @param {string} endpoint @param {string} path */
+/** Gallery API URL with an optional cache-busting version. @param {string} endpoint @param {string} path @param {string} [version] */
 export const apiURL = (endpoint, path, version = '') => `${endpoint}?path=${encodeURIComponent(path)}${version ? `&v=${encodeURIComponent(version)}` : ''}`;
 
 /** @param {number | undefined} bytes */

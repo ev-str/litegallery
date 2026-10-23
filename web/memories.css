@@ -1,0 +1,124 @@
+/* Воспоминания: heading, event cards with a cover mosaic, and the full list. */
+.memories-header { max-width: 920px; margin-bottom: 20px; }
+.memories-header h1 { margin: 0; font-size: 1.35rem; letter-spacing: -.03em; }
+.memories-header h1:focus { outline: none; }
+.memories-note { min-height: 1.3em; margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
+.memories-note:empty { min-height: 0; margin: 0; }
+
+.memories-message {
+  max-width: 560px;
+  padding: 24px;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.memories-message > span { color: var(--muted); line-height: 1.45; }
+.memories-message[hidden], .memories-retry[hidden], .memories-all-header[hidden],
+.memories-list[hidden], .memories-all[hidden] { display: none; }
+
+.memories-all-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.memories-all-header h2 { margin: 0; font-size: 1.1rem; }
+.memories-all-header h2:focus { outline: none; }
+
+.memories-back, .memories-all, .memories-retry {
+  min-height: var(--control-height);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.memories-all { margin-top: 22px; }
+.memories-back:hover, .memories-back:focus-visible, .memories-all:hover, .memories-all:focus-visible,
+.memories-retry:hover, .memories-retry:focus-visible { border-color: var(--accent); outline: 3px solid rgba(187, 118, 84, .22); }
+
+.memories-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--grid-gap);
+  list-style: none;
+}
+.memory-card { position: relative; min-width: 0; }
+.memory-open {
+  width: 100%;
+  padding: 0;
+  display: grid;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 5px 18px rgba(67, 48, 33, .08);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+}
+.memory-open:hover, .memory-open:focus-visible { border-color: var(--accent); outline: 3px solid rgba(187, 118, 84, .32); outline-offset: 2px; }
+
+.memory-cover {
+  aspect-ratio: 4 / 3;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-rows: 1fr;
+  gap: 2px;
+  background: #e7ddd1;
+}
+.memory-cover[data-count="2"] { grid-template-columns: 1fr 1fr; }
+.memory-cover[data-count="3"] { grid-template-columns: 2fr 1fr; }
+.memory-cover[data-count="3"] .memory-cover-cell:first-child { grid-row: span 2; }
+.memory-cover[data-count="4"] { grid-template-columns: 1fr 1fr; }
+.memory-cover-cell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(84, 62, 43, .58);
+  background: linear-gradient(145deg, #eadfce, #d8c4ae);
+  overflow: hidden;
+}
+.memory-cover-cell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .25s ease; }
+.memory-cover-cell.is-broken img { display: none; }
+.memory-cover-cell .icon { font-size: 1.6rem; }
+.memory-open:hover img, .memory-open:focus-visible img { transform: scale(1.025); }
+
+.memory-text { padding: 12px 16px 14px; display: grid; gap: 3px; }
+.memory-period { font-size: 1rem; }
+.memory-contents { color: var(--muted); font-size: .86rem; }
+
+.memory-tv {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(22, 19, 17, .58);
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.memory-tv .icon { font-size: 1.25rem; }
+.memory-tv:hover, .memory-tv:focus-visible { background: var(--accent); outline: 3px solid rgba(187, 118, 84, .4); outline-offset: 2px; }
+
+@media (max-width: 700px) {
+  .memories-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+  .memory-text { padding: 10px 12px 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .memory-cover-cell img { transition: none; }
+}

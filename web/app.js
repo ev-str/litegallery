@@ -8,6 +8,7 @@ import {createRefreshLoop} from './live-refresh.js';
 import {createLoadQueue} from './load-queue.js';
 import {createMediaWindow} from './media-window.js';
 import {createSearch, relativeFolder, relativePath} from './search.js';
+import {createMemories} from './memories.js';
 import {pauseVideoWork, queueVideoDuration, queueVideoPreview, wakeVideoWork} from './video-posters.js';
 import {createViewer} from './viewer.js';
 
@@ -37,7 +38,7 @@ const state = createGalleryState({...readPageURL(location.search), local: localS
 let directories = [];
 let allMedia = [];
 let media = [];
-/** Header control that opened the viewer; null when a tile did. */
+/** Header control or memories card that opened the viewer; null when a tile did. */
 let viewerOpener = null;
 
 // Fixed grid density, stored separately for phones and for desktop/TV screens.
@@ -645,7 +646,7 @@ function flashLastOpened(tile) {
 // After the viewer: focus the header TV button if TV started there; else the tile it was
 // opened from, else its nearest neighbour, else the refresh button in the sticky header.
 function returnFromViewer() {
-  pauseGalleryWork(false);
+  pauseGalleryWork(surfaces.current !== 'gallery' && surfaces.current !== 'search');
   if (viewerOpener) {
     viewerOpener.focus({preventScroll: true});
     viewerOpener = null;
@@ -827,6 +828,20 @@ surfaces.register('search', {
   },
 });
 surfaces.register('collage', {panel: document.querySelector('#collageSurface'), entry: document.querySelector('#collageMode')});
+// Memories open their event in the same viewer; closing it returns to the event card.
+// Registering shows the entry, so the module, which hides it until events exist, comes after.
+surfaces.register('memories', {panel: document.querySelector('#memoriesSurface'), entry: document.querySelector('#memoriesMode'), enter: () => memories.enter()});
+const memories = createMemories({
+  panel: document.querySelector('#memoriesSurface'),
+  entry: document.querySelector('#memoriesMode'),
+  openViewer: (items, {tv, returnFocus}) => {
+    if (viewer.isOpen || !items.length) return;
+    viewerOpener = returnFocus;
+    pauseGalleryWork(true);
+    if (tv) viewer.openTV(items, 0);
+    else viewer.open(items, 0);
+  },
+});
 // Section entries sit in the text navigation and as separate header icons.
 routeSurfaceEntries(document.querySelector('.topbar-actions'), surfaces);
 
@@ -851,4 +866,5 @@ collageEditor.addEventListener('close', () => {
 
 applyDensity();
 liveRefresh.start();
+memories.refresh();
 load(state.path, {history: 'none', recursive: state.recursive});
