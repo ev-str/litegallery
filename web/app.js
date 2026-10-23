@@ -639,7 +639,10 @@ function restoreView(path) {
 function keepInPlace(anchor, update) {
   const before = anchor?.getBoundingClientRect().top;
   update();
-  if (anchor?.isConnected) scrollBy({top: anchor.getBoundingClientRect().top - before, behavior: 'instant'});
+  if (anchor?.isConnected) {
+    const after = anchor.getBoundingClientRect().top;
+    scrollBy({top: Math.round(after) - Math.round(before), behavior: 'instant'});
+  }
 }
 
 function flashLastOpened(tile) {

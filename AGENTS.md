@@ -49,7 +49,13 @@ untagged or dirty trees. Upload `dist/*` (binaries and `SHA256SUMS`).
 
 Browser-test rules:
 
-- Run a changed spec right after editing it, with `--max-failures=1`.
+- Run a changed spec right after editing it, with `--timeout=15000
+  --max-failures=1`.
+- Run the first full regression pass with `--timeout=15000
+  --max-failures=10`. While it runs, report completed, failed, and remaining
+  test counts.
+- Re-run only the failed tests with `--timeout=30000 --max-failures=5` before
+  deciding whether a failure is a product bug, a slow test, or a flaky test.
 - Never run two Playwright runs at once: both use port 18090.
 - Derive expectations from the shared modules (`web/collage/formats.js`,
   `web/collage/templates.js`) instead of hard-coding counts or aspect ratios.

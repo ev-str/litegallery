@@ -308,13 +308,15 @@ export function createMediaWindow({grid, createCard, viewportTop = () => 0, onCh
     entry.card.remove();
   }
 
-  /** @param {number} index @param {HTMLElement} card */
-  function pin(index, card) {
+  /** @param {number} index @param {HTMLElement} card @param {boolean} [parked] */
+  function pin(index, card, parked = false) {
     const {tile, columnGap} = geometry;
     const row = layout.itemRow[index];
     card.classList.add('is-window-pinned');
-    card.style.top = `${layout.top[row]}px`;
-    card.style.left = `${(index - layout.itemStart[row]) * (tile + columnGap)}px`;
+    if (parked) card.classList.add('is-window-parked');
+    else card.classList.remove('is-window-parked');
+    card.style.top = parked ? '0' : `${layout.top[row]}px`;
+    card.style.left = parked ? '0' : `${(index - layout.itemStart[row]) * (tile + columnGap)}px`;
     card.style.width = `${tile}px`;
   }
 
@@ -322,6 +324,7 @@ export function createMediaWindow({grid, createCard, viewportTop = () => 0, onCh
   function unpin(card) {
     if (!card.classList.contains('is-window-pinned')) return;
     card.classList.remove('is-window-pinned');
+    card.classList.remove('is-window-parked');
     card.style.removeProperty('top');
     card.style.removeProperty('left');
     card.style.removeProperty('width');
@@ -346,7 +349,9 @@ export function createMediaWindow({grid, createCard, viewportTop = () => 0, onCh
     const active = document.activeElement;
     for (const [index, {card}] of live) {
       if (rowInRange(layout.itemRow[index])) unpin(card);
-      else if (active && card.contains(active)) pin(index, card);
+      // Park the focused card outside the viewport. Keeping it at its logical,
+      // absolutely positioned cell makes WebKit pull the document back to it.
+      else if (active && card.contains(active)) pin(index, card, true);
       else drop(index);
     }
     for (const [group, heading] of headings) {

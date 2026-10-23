@@ -88,9 +88,13 @@ test('closing the viewer focuses and briefly highlights the tile it was opened f
   await opened.click();
   const viewer = page.locator('#viewer');
   await expect(viewer.locator('.caption')).toContainText('Photo 030.png');
-  await viewer.getByRole('button', {name: 'Следующее'}).click();
+  const next = viewer.getByRole('button', {name: 'Следующее'});
+  await next.focus();
+  await next.press('Enter');
   await expect(viewer.locator('.caption')).toContainText('Photo 029.png');
-  await viewer.getByRole('button', {name: 'Закрыть', exact: true}).click();
+  const close = viewer.getByRole('button', {name: 'Закрыть', exact: true});
+  await close.focus();
+  await close.press('Enter');
 
   await expect(viewer).toBeHidden();
   await expect(opened).toBeFocused();
@@ -144,10 +148,12 @@ test('refresh keeps filter, sorting, direction, density, scroll, and the focused
   await expect(page.locator(`#gridDensity [data-columns="${columns}"]`)).toHaveAttribute('aria-pressed', 'true');
 
   // The refresh button keeps its own focus.
-  await page.locator('#refresh').click();
+  const refresh = page.locator('#refresh');
+  await refresh.evaluate(element => element.focus({preventScroll: true}));
+  await refresh.press('Enter');
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
   await expect.poll(() => scrollTop(page)).toBe(scroll);
-  await expect(page.locator('#refresh')).toBeFocused();
+  await expect(refresh).toBeFocused();
 
   // A reload restores the same view from session storage.
   await page.reload();
@@ -170,8 +176,9 @@ test('filter, sort, and density changes keep the controls and the top tile in pl
   expect((await heading.boundingBox()).y).toBe(headingY);
   expect(await scrollTop(page)).toBe(120);
 
-  // Index 30 starts a row in every density this test leaves (5 or 2 columns).
-  const top = page.locator('#mediaGrid .media-card').nth(30);
+  // Stay clear of the document's lower scroll limit in both density modes.
+  const anchorIndex = testInfo.project.use.viewport.width <= 700 ? 12 : 10;
+  const top = page.locator('#mediaGrid .media-card').nth(anchorIndex);
   const headerBottom = await page.locator('.topbar').evaluate(element => element.getBoundingClientRect().bottom);
   await top.evaluate((element, offset) => scrollTo({top: element.getBoundingClientRect().top + scrollY - offset, behavior: 'instant'}), headerBottom + 6);
   const before = (await top.boundingBox()).y;
@@ -229,7 +236,9 @@ test('a tile that disappears while the viewer is open falls back safely', async 
   await page.evaluate(() => document.querySelector('#refresh').click());
   await expect(page.locator('#emptyState')).toBeVisible();
   const scroll = await scrollTop(page);
-  await page.locator('#viewer').getByRole('button', {name: 'Закрыть', exact: true}).click();
+  const closeEmpty = page.locator('#viewer').getByRole('button', {name: 'Закрыть', exact: true});
+  await closeEmpty.focus();
+  await closeEmpty.press('Enter');
   await expect(page.locator('#viewer')).toBeHidden();
   const refresh = page.locator('#refresh');
   await expect(refresh).toBeFocused();

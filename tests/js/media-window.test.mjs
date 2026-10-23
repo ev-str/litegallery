@@ -308,7 +308,7 @@ test('a small scroll inside the margin keeps the same cards', t => {
   assertSorted(indices());
 });
 
-test('the focused card outside the window stays in the DOM at its own cell', t => {
+test('the focused card outside the window stays parked in the DOM', t => {
   const {page, view, indices} = setup(5000);
   t.after(page.restore);
   const focused = page.grid.childNodes[6];
@@ -316,8 +316,9 @@ test('the focused card outside the window stays in the DOM at its own cell', t =
   page.scrollTo(200 + 900 * 110);
   assert.equal(focused.isConnected, true);
   assert.equal(focused.classList.contains('is-window-pinned'), true);
-  assert.equal(focused.style.top, `${1 * 110}px`);
-  assert.equal(focused.style.left, `${2 * 110}px`);
+  assert.equal(focused.classList.contains('is-window-parked'), true);
+  assert.equal(focused.style.top, '0');
+  assert.equal(focused.style.left, '0');
   assert.equal(focused.style.width, '100px');
   assert.equal(indices()[0], 6);
   assertSorted(indices());
@@ -325,6 +326,7 @@ test('the focused card outside the window stays in the DOM at its own cell', t =
   // Back in the window it flows in the grid again without being moved.
   page.scrollTo(0);
   assert.equal(focused.classList.contains('is-window-pinned'), false);
+  assert.equal(focused.classList.contains('is-window-parked'), false);
   assert.equal(focused.style.top, '');
   assert.equal(page.grid.childNodes[6], focused);
   page.focused = null;

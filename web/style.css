@@ -491,8 +491,9 @@ main {
 }
 
 /* Large folders render a window of rows; a focused tile outside it keeps its own cell. */
-.media-grid { position: relative; }
+.media-grid { position: relative; overflow-anchor: none; }
 .media-card.is-window-pinned { position: absolute; }
+.media-card.is-window-pinned.is-window-parked { position: fixed; transform: translate(-200vw, -200vh); pointer-events: none; }
 
 /* Date groups: a full-width heading row starts every group. The sticky copy above
    the grid names the group at the top of the viewport; it takes no space. */
@@ -940,8 +941,10 @@ main {
 
 @media (max-width: 700px) {
   :root { --header-height: 58px; --grid-gap: 6px; --tile-radius: 12px; --date-heading-height: 30px; }
-  .topbar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 8px 10px; }
-  .topbar-actions { gap: 6px; }
+  .topbar { grid-template-columns: minmax(88px, 1fr) minmax(0, 2fr); gap: 8px; padding: 8px 10px; overflow: hidden; }
+  .topbar-actions { min-width: 0; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .topbar-actions::-webkit-scrollbar { display: none; }
+  body:not([data-surface="gallery"]) .topbar { grid-template-columns: 0 minmax(0, 1fr); }
   .density-segments button { min-width: 30px; padding-inline: 6px; }
   .collage-entry-button { padding-inline: 10px; }
   .app-sections { gap: 4px; }

@@ -161,7 +161,7 @@ test('a 5 000-item folder keeps a bounded window and reaches the first, middle, 
   await expect(tile(page, NEWEST_FIRST[2500])).toBeInViewport();
   await expectWindowOf(page, NEWEST_FIRST);
 
-  await scrollToTop(page, Number.MAX_SAFE_INTEGER);
+  await scrollToTop(page, await page.evaluate(() => document.scrollingElement.scrollHeight));
   await expect(tile(page, NEWEST_FIRST.at(-1))).toBeInViewport();
   await expectWindowOf(page, NEWEST_FIRST);
 
@@ -292,7 +292,7 @@ test('sort, filter, and density work on the whole folder and keep the position',
   await scrollToTop(page, 0);
   await expect(cards(page).first()).toHaveAttribute('data-path', videos[0]);
   await expectWindowOf(page, videos);
-  await scrollToTop(page, Number.MAX_SAFE_INTEGER);
+  await scrollToTop(page, await page.evaluate(() => document.scrollingElement.scrollHeight));
   await expect(tile(page, videos.at(-1))).toBeInViewport();
   await expectWindowOf(page, videos);
 
@@ -402,8 +402,8 @@ test('arrow keys cross the window and the focused tile survives scrolling away',
   const right = tile(page, NEWEST_FIRST[steps * columns + 1]);
   await expect(right).toBeFocused();
 
-  // Scrolling far away keeps the focused tile in the DOM at its own cell.
-  await scrollToTop(page, Number.MAX_SAFE_INTEGER);
+  // A real keyboard scroll keeps the focused tile parked in the DOM.
+  await page.keyboard.press('End');
   await expect(tile(page, NEWEST_FIRST.at(-1))).toBeInViewport();
   await expect(right).toBeFocused();
   await expect(right).toHaveClass(/is-window-pinned/);

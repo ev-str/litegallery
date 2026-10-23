@@ -171,6 +171,8 @@ test.describe('Найти', () => {
     await expect(page.locator('#tvMode')).toBeEnabled();
     await page.locator('#tvMode').click();
     await expect(caption(page)).toHaveText('louvre.png · 1/2');
+    await page.evaluate(() => document.exitFullscreen());
+    await expect(viewer(page)).not.toHaveAttribute('data-tv');
     await page.keyboard.press('Escape');
     await expect(viewer(page)).toBeHidden();
     expect(requests).toEqual([]);
@@ -184,6 +186,8 @@ test.describe('Найти', () => {
       await tv.click();
       await expect(viewer(page)).toBeVisible();
       await expect(caption(page)).toHaveText(expected);
+      await page.evaluate(() => document.exitFullscreen());
+      await expect(viewer(page)).not.toHaveAttribute('data-tv');
       await page.keyboard.press('Escape');
       await expect(viewer(page)).toBeHidden();
     };

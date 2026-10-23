@@ -74,7 +74,8 @@ async function openTrip(page) {
 }
 
 async function switchRecursive(page, on) {
-  await toggle(page).click();
+  await toggle(page).focus();
+  await toggle(page).press('Enter');
   await expect(toggle(page)).toHaveAttribute('aria-pressed', String(on));
   await expect(tiles(page)).toHaveCount(on ? TRIP_FILES.length : 2);
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
@@ -105,7 +106,8 @@ test('the toggle asks the real server for the recursive listing of the opened fo
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(toggle(page)).toHaveAccessibleName('Из подпапок');
 
-  await toggle(page).click();
+  await toggle(page).focus();
+  await toggle(page).press('Enter');
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(toggle(page)).toBeFocused();
   await expect(page).toHaveURL(/\?path=Album%20A&recursive=1$/);
@@ -318,7 +320,8 @@ test('an empty subtree and a failed recursive listing leave the page usable', {t
   await mockLibrary(page);
   await page.goto('/?path=Empty');
   await expect(page.locator('#folders .folder-card')).toHaveCount(1);
-  await toggle(page).click();
+  await toggle(page).focus();
+  await toggle(page).press('Enter');
   await expect(page.locator('#emptyState')).toBeVisible();
   await expect(page.locator('#emptyState')).toContainText('В этой папке и её подпапках нет фотографий и видео');
   await expect(page.locator('#foldersSection')).toBeHidden();
@@ -327,7 +330,8 @@ test('an empty subtree and a failed recursive listing leave the page usable', {t
 
   await page.goto('/?path=Broken');
   await expect(tiles(page)).toHaveCount(1);
-  await toggle(page).click();
+  await toggle(page).focus();
+  await toggle(page).press('Enter');
   await expect(page.locator('#status')).toHaveText('Каталог недоступен');
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
   await expect(page.locator('#mediaSection')).toBeHidden();

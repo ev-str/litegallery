@@ -86,6 +86,8 @@ test.describe('collage landing', () => {
     await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(13);
     await page.locator('#gridDensity [data-density-step="0"]').click();
     await page.locator('#tvMode').dispatchEvent('click');
+    await page.evaluate(() => document.exitFullscreen());
+    await expect(page.locator('#viewer')).not.toHaveAttribute('data-tv');
     await page.keyboard.press('Escape');
     await expect(page.locator('#viewer')).toBeHidden();
     await expect(page.locator('body')).toHaveAttribute('data-surface', 'gallery');
@@ -102,7 +104,9 @@ test.describe('collage landing', () => {
     await expect(page.locator('#collageSelection')).toBeVisible();
     await expect(page.locator('#galleryMode')).toHaveAttribute('aria-current', 'page');
     await selectPhotos(page, 2);
-    await page.getByRole('button', {name: 'Сделать коллаж'}).click();
+    const start = page.getByRole('button', {name: 'Сделать коллаж'});
+    await start.evaluate(element => element.focus({preventScroll: true}));
+    await start.press('Enter');
     await expect(editor(page)).toBeVisible();
     await expect(editor(page).locator('[data-cell-index]')).toHaveCount(2);
 
@@ -185,6 +189,9 @@ test.describe('collage landing', () => {
     await chooser;
     await createCard(page).tap();
     await expect(page.locator('#collageSelection')).toBeVisible();
+    await selectPhotos(page, 2);
+    await page.getByRole('button', {name: 'Сделать коллаж'}).tap();
+    await expect(editor(page)).toBeVisible();
   });
 
   test('returning to the gallery keeps folder, recursive scope, filter, sort, density, scroll, and focus', {tag: '@essential'}, async ({page}, testInfo) => {

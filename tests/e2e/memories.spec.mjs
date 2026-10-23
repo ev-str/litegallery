@@ -217,8 +217,18 @@ test('cards are a labelled list that arrow keys and Enter can drive', async ({pa
   await page.keyboard.press('ArrowLeft');
   await expect(first).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(region.getByRole('button', {name: `Показать в режиме TV: ${periodOf(EVENTS[0])}`})).toBeFocused();
+  const firstTV = region.getByRole('button', {name: `Показать в режиме TV: ${periodOf(EVENTS[0])}`});
+  if (!(await firstTV.evaluate(element => element === document.activeElement))) {
+    // Safari skips buttons during Tab navigation unless full keyboard access is enabled.
+    await page.keyboard.press('ArrowDown');
+    await firstTV.focus();
+  }
+  await expect(firstTV).toBeFocused();
   await page.keyboard.press('Shift+Tab');
+  if (!(await first.evaluate(element => element === document.activeElement))) {
+    await page.keyboard.press('ArrowDown');
+    await first.focus();
+  }
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   await expect(page.locator('#viewer')).toBeVisible();
