@@ -268,10 +268,13 @@ export function createMediaWindow({grid, createCard, viewportTop = () => 0, onCh
   }
 
   // A width change (window resize, a scrollbar that the new height brought) is
-  // caught here, synchronously, so no frame is painted with stale padding.
+  // caught here, synchronously, so no frame is painted with stale padding. A grid
+  // in a hidden application section has no width and keeps its last geometry.
   function sync() {
     if (!items.length) return;
-    if (grid.getBoundingClientRect().width !== measuredWidth) relayout();
+    const width = grid.getBoundingClientRect().width;
+    if (!width) return;
+    if (width !== measuredWidth) relayout();
     else follow();
   }
 

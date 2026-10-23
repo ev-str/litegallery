@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {enterSelectionMode} from './helpers.mjs';
 import {WINDOW_MIN_ITEMS} from '../../web/media-window.js';
 
 const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
@@ -365,7 +366,7 @@ test('the viewer and collage selection get the right items after scrolling', asy
   await expect(opened).toBeFocused();
   await expect(opened).toBeInViewport();
 
-  await page.locator('#collageMode').click();
+  await enterSelectionMode(page);
   const first = NEWEST_FIRST.find((path, index) => index > 2600 && path.endsWith('.jpg'));
   const second = NEWEST_FIRST.find((path, index) => index > 4500 && path.endsWith('.jpg'));
   await scrollToIndex(page, NEWEST_FIRST.indexOf(first));

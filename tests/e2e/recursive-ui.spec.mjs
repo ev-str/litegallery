@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {enterSelectionMode} from './helpers.mjs';
 
 const ONE_PIXEL_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const BASE_TIME = 1_760_000_000;
@@ -260,7 +261,7 @@ test('collage selection keeps same-named photos from different subfolders apart'
   await openTrip(page);
   await switchRecursive(page, true);
   await expect(page.locator('#collageMode')).toBeVisible();
-  await page.locator('#collageMode').click();
+  await enterSelectionMode(page);
   const first = tile(page, 'Trip/Day 1/IMG_0001.jpg');
   const second = tile(page, 'Trip/Day 2/IMG_0001.jpg');
   await first.click();

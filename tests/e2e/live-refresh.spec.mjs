@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {enterSelectionMode} from './helpers.mjs';
 import {VIEWS_KEY} from '../../web/gallery-state.js';
 import {LIVE_REFRESH_MS} from '../../web/live-refresh.js';
 
@@ -367,7 +368,7 @@ test('an unchanged listing keeps every tile element, and collage selection pause
   expect(await first.evaluate(card => card.isConnected)).toBe(true);
   expect(await folder.evaluate(card => card.isConnected)).toBe(true);
 
-  await page.locator('#collageMode').click();
+  await enterSelectionMode(page);
   await page.getByRole('button', {name: 'Выбрать Photo 060.png для коллажа'}).click();
   library.listings.Live.push(photo('Live/During.png', 600));
   await page.clock.runFor(LIVE_REFRESH_MS * 2);

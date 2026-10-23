@@ -39,7 +39,7 @@ const appConfigReady = fetch('/api/config', {credentials: 'same-origin'})
 dialog.innerHTML = `
   <div class="collage-shell">
     <header class="collage-toolbar">
-      <button type="button" data-command="close" aria-label="Закрыть редактор">${iconMarkup('arrow-left')}</button>
+      <button type="button" class="collage-back" data-command="close" aria-label="К проектам">${iconMarkup('arrow-left')}<span>К проектам</span></button>
       <input class="collage-project-name" data-project-name type="text" maxlength="80" aria-label="Название коллажа" placeholder="Название коллажа">
       <div class="collage-toolbar-spacer"></div>
       <button type="button" data-command="undo" title="Отменить" aria-label="Отменить последнее действие">${iconMarkup('undo')}</button>

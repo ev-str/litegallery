@@ -1,7 +1,7 @@
 import {mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {test, expect} from '@playwright/test';
-import {editor} from './helpers.mjs';
+import {editor, enterSelectionMode} from './helpers.mjs';
 
 const enabled = process.env.LITEGALLERY_DOC_SCREENSHOTS === '1';
 const screenshots = resolve('docs/screenshots');
@@ -31,7 +31,7 @@ test.describe('documentation screenshots', () => {
     await page.keyboard.press('Escape');
     await expect(viewer).toBeHidden();
 
-    await page.locator('#collageMode').click();
+    await enterSelectionMode(page);
     const photoButtons = page.locator('#mediaGrid .media-card.image');
     await expect(photoButtons).toHaveCount(5);
     for (let index = 0; index < 5; index += 1) await photoButtons.nth(index).click();

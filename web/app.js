@@ -1,3 +1,5 @@
+import {createSurfaces, routeSurfaceEntries} from './app-surfaces.js';
+import {createCollageLanding} from './collage-landing.js';
 import {createCollageSelection} from './collage-selection.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
 import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
@@ -27,7 +29,8 @@ const recursiveToggle = document.querySelector('#recursiveToggle');
 const densityControl = document.querySelector('#gridDensity');
 const header = document.querySelector('.topbar');
 const collageEditor = document.querySelector('#collageEditor');
-const main = document.querySelector('main');
+const main = document.querySelector('#gallerySurface');
+const galleryEntry = document.querySelector('#galleryMode');
 
 const state = createGalleryState({...readPageURL(location.search), local: localStorage, session: sessionStorage});
 let directories = [];
@@ -327,7 +330,7 @@ function showListing(entries) {
 // Background checks repeat the request of the page on screen quietly: no skeletons, no busy
 // state, no history or saved view. A load started meanwhile aborts the check, and an answer
 // for a page that has moved on is dropped. The viewer keeps the list it was opened with.
-const canCheck = () => state.shownPath !== null && state.shownPath === state.requestedPath && !collageEditor.open && !selection.active;
+const canCheck = () => state.shownPath !== null && state.shownPath === state.requestedPath && !collageEditor.open && !selection.active && surfaces.current === 'gallery';
 
 /** @param {AbortSignal} signal aborts when a load starts or the tab is hidden */
 async function checkForChanges(signal) {
@@ -731,6 +734,7 @@ tvButton.onclick = () => {
 recursiveToggle.addEventListener('click', () => load(state.requestedPath, {history: 'replace', recursive: !state.recursive}));
 addEventListener('popstate', () => {
   const {path, recursive} = readPageURL(location.search);
+  surfaces.show('gallery');
   load(path, {history: 'none', recursive});
 });
 addEventListener('keydown', event => {
@@ -739,10 +743,58 @@ addEventListener('keydown', event => {
     return;
   }
   if (focusInDirection(event.key)) event.preventDefault();
-  if ((event.key === 'Escape' || event.key === 'Backspace') && state.path) {
+  if ((event.key === 'Escape' || event.key === 'Backspace') && state.path && surfaces.current === 'gallery') {
     event.preventDefault();
     load(state.path.split('/').slice(0, -1).join('/'));
   }
+});
+
+// Application sections. The gallery stays rendered while another section is open:
+// leaving it remembers scroll and focus, coming back restores them without a reload.
+const surfaces = createSurfaces({onChange: current => { document.body.dataset.surface = current; }});
+
+function leaveGallery() {
+  rememberView();
+  selection.cancel();
+  pauseGalleryWork(true);
+}
+
+function enterGallery() {
+  pauseGalleryWork(false);
+  restoreGallery();
+}
+
+// Scroll by the remembered anchor tile, then focus the tile the user left.
+function restoreGallery() {
+  const view = state.shownPath === null ? null : state.view(state.shownPath);
+  if (view) restoreView(state.shownPath);
+  const visible = document.activeElement !== document.body && document.activeElement?.closest('[hidden]') === null;
+  const target = tileFor(view?.focusPath) ?? (visible ? null : galleryItems()[0] ?? galleryEntry);
+  target?.focus({preventScroll: true});
+}
+
+surfaces.register('gallery', {panel: main, entry: galleryEntry, leave: leaveGallery, enter: enterGallery});
+surfaces.register('collage', {panel: document.querySelector('#collageSurface'), entry: document.querySelector('#collageMode')});
+// Section entries sit in the text navigation and as separate header icons.
+routeSurfaceEntries(document.querySelector('.topbar-actions'), surfaces);
+
+const collageLanding = createCollageLanding({
+  createCard: document.querySelector('#collageCreate'),
+  openCard: document.querySelector('#collageOpenProject'),
+  status: document.querySelector('#collageLandingStatus'),
+  projectInput: document.querySelector('#collageProjectInput'),
+  onCreate: () => {
+    surfaces.show('gallery');
+    // Selection mode re-renders the grid, which drops the restored position.
+    selection.enter();
+    restoreGallery();
+  },
+  isActive: () => surfaces.current === 'collage' && !collageEditor.open,
+});
+// Leaving the editor, however it was opened, lands on the collage screen.
+collageEditor.addEventListener('close', () => {
+  surfaces.show('collage');
+  collageLanding.returnFocus();
 });
 
 applyDensity();

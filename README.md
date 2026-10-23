@@ -120,10 +120,14 @@ browsing does not rescan every original file.
 
 ## Collage editor
 
-Open a folder, press **Collage**, and select between 2 and 12 photos. The editor
-can combine photos from several gallery folders and allows the same photo to
-fill more than one cell. A saved JSON or ZIP project can also be opened
-directly from the collage-selection bar.
+Press **Коллаж** in the header to open the collage screen. **Создать коллаж**
+returns to the gallery, where you select between 2 and 12 photos; **Открыть
+проект** opens a saved JSON or ZIP project, either by click or by dropping the
+file onto that card. The gallery keeps its folder, controls, scroll position,
+and focus while the collage screen is open, and closing the editor with
+**К проектам** returns to the collage screen. The editor can combine photos
+from several gallery folders and allows the same photo to fill more than one
+cell.
 
 ![LiteGallery collage editor](docs/screenshots/collage-editor.png)
 

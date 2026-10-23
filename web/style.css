@@ -66,7 +66,49 @@ button > .icon + span { margin-left: .4em; }
   font-weight: 700;
 }
 
-.collage-entry-button[aria-pressed="true"] { color: white; background: var(--accent); }
+.collage-entry-button[aria-current="page"] { color: white; background: var(--accent); border-color: var(--accent); }
+.collage-entry-button[hidden] { display: none; }
+
+/* Application sections: the header keeps its layout, gallery controls only hide. */
+.app-sections { display: flex; gap: 6px; }
+body:not([data-surface="gallery"]) .gallery-control { visibility: hidden; }
+.app-surface {
+  width: min(1680px, 100%);
+  margin: 0 auto;
+  padding: 26px clamp(16px, 4vw, 64px) 80px;
+}
+.app-surface[hidden], main[hidden] { display: none; }
+
+.collage-landing h1 { margin: 0 0 18px; font-size: 1.35rem; letter-spacing: -.03em; }
+.collage-landing-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: var(--grid-gap);
+  max-width: 920px;
+}
+.collage-landing-card {
+  min-height: 190px;
+  padding: 24px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font: inherit;
+  text-align: center;
+}
+.collage-landing-card strong { font-size: 1.12rem; }
+.collage-landing-card > span { color: var(--muted); font-size: .9rem; line-height: 1.45; }
+.collage-drop-text > span { display: block; }
+.collage-drop-card { border: 2px dashed rgba(169, 104, 73, .45); }
+.collage-landing-card:hover, .collage-landing-card:focus-visible { border-color: var(--accent); outline: 3px solid rgba(187, 118, 84, .22); }
+.collage-drop-card[data-drop-active="true"] { background: #fbefe6; border-color: var(--accent); }
+.collage-landing-status { max-width: 920px; margin: 16px 0 0; color: #8b352d; font-weight: 650; }
+.collage-landing-status[hidden] { display: none; }
 
 .topbar {
   position: sticky;
@@ -803,6 +845,11 @@ main {
   .topbar-actions { gap: 6px; }
   .density-segments button { min-width: 30px; padding-inline: 6px; }
   .collage-entry-button { padding-inline: 10px; }
+  .app-sections { gap: 4px; }
+  #galleryMode .surface-label { display: none; }
+  #galleryMode .icon + span { margin-left: 0; }
+  .app-surface { padding: 16px 10px 52px; }
+  .collage-landing-card { min-height: 150px; padding: 18px; }
   .brand { display: none; }
   main { padding: 16px 10px 52px; }
   .folder-card { border-radius: var(--tile-radius); }

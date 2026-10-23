@@ -229,7 +229,9 @@ test('primary collage path is keyboard focusable and crop reacts to arrows', asy
   await page.keyboard.press('Tab');
   const focused = page.locator(':focus');
   await expect(focused).toBeVisible();
-  await page.getByRole('button', {name: 'Выбрать фотографии для коллажа'}).focus();
+  await page.getByRole('navigation', {name: 'Разделы'}).getByRole('button', {name: 'Коллаж'}).focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', {name: /Создать коллаж/}).focus();
   await page.keyboard.press('Enter');
   await expect(page.locator('#collageSelection')).toBeVisible();
 

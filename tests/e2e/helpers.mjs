@@ -13,8 +13,14 @@ export async function openAlbum(page, album = 'Album A') {
   await expect(page.locator('#mediaGrid .media-card.image')).toHaveCount(album === 'Album A' ? 13 : 4);
 }
 
-export async function enterSelectionMode(page) {
+export async function openCollageLanding(page) {
   await page.locator('#collageMode').click();
+  await expect(page.locator('#collageSurface')).toBeVisible();
+}
+
+export async function enterSelectionMode(page) {
+  await openCollageLanding(page);
+  await page.locator('#collageCreate').click();
   await expect(page.locator('#collageSelection')).toBeVisible();
 }
 

@@ -8,12 +8,12 @@ const TIFF_HINT = 'TIFF пока недоступен для коллажа';
 
 /**
  * Collage selection mode of the gallery: the selection bar, card states, and
- * the hand-off to the collage editor through window events.
+ * the hand-off to the collage editor through window events. The collage landing
+ * screen turns the mode on with `enter()`.
  * @param {{onModeChange: () => void, getCurrentPath: () => string}} options
  *   onModeChange re-renders the media grid; getCurrentPath is the open folder.
  */
 export function createCollageSelection({onModeChange, getCurrentPath}) {
-  const modeButton = document.querySelector('#collageMode');
   const bar = document.querySelector('#collageSelection');
   const count = document.querySelector('#collageSelectionCount');
   const start = document.querySelector('#collageSelectionStart');
@@ -66,7 +66,6 @@ export function createCollageSelection({onModeChange, getCurrentPath}) {
     count.textContent = String(selection.size);
     start.disabled = selection.size < 2;
     bar.hidden = !active;
-    modeButton.setAttribute('aria-pressed', String(active));
     updateHint();
   }
 
@@ -126,13 +125,14 @@ export function createCollageSelection({onModeChange, getCurrentPath}) {
     return true;
   }
 
-  modeButton.addEventListener('click', () => {
-    active = !active;
-    if (!active) selection.clear();
+  function enter() {
+    if (active) return;
+    active = true;
     resetHint();
     updateBar();
     onModeChange();
-  });
+  }
+
   cancel.addEventListener('click', leave);
   projectOpen.addEventListener('click', () => {
     resetHint();
@@ -144,7 +144,7 @@ export function createCollageSelection({onModeChange, getCurrentPath}) {
     window.dispatchEvent(new CustomEvent('litegallery:open-collage', {detail: {photos: [...selection.values()], path: getCurrentPath()}}));
     leave();
   });
-  window.addEventListener('litegallery:project-loaded', leave);
+  window.addEventListener('litegallery:project-loaded', () => { if (active) leave(); });
   window.addEventListener('litegallery:project-load-error', event => {
     hint.textContent = event.detail?.message || 'Не удалось открыть проект';
   });
@@ -152,6 +152,9 @@ export function createCollageSelection({onModeChange, getCurrentPath}) {
   return {
     decorateCard,
     handleCardClick,
+    enter,
+    /** Leave selection mode, dropping the chosen photos. */
+    cancel() { if (active) leave(); },
     /** Selection mode is on; the gallery then leaves the listing as it is. */
     get active() { return active; },
   };

@@ -2,6 +2,7 @@
 // control order, and layout rules. Behaviour belongs in tests/e2e instead;
 // remove an assertion here once a browser test covers the same behaviour.
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
@@ -84,4 +85,14 @@ test('JPEG export keeps the bleed checkbox attached and reserves room for qualit
   assert.match(source, /class="collage-export-weakest">Слабый кадр:/);
   assert.match(css, /\.collage-export-form > \.collage-export-bleed\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/s);
   assert.match(css, /\.collage-export-weakest, \.collage-export-bleed-state\s*\{[^}]*grid-column:\s*span 2;[^}]*white-space:\s*nowrap;/s);
+});
+
+test('editor body markup below the header is unchanged since the collage landing was added', async () => {
+  const source = await readFile(editorUrl, 'utf8');
+  const start = source.indexOf('dialog.innerHTML = `');
+  const markup = source.slice(start, source.indexOf('`;', start));
+  const body = markup.slice(markup.indexOf('</header>') + '</header>'.length);
+  // Hash of the same slice at 0d8ea51. Update it only for a deliberate editor body change.
+  assert.equal(createHash('sha256').update(body).digest('hex'), 'f1b9d75219413405cf4fc154d8126e48db5c9cc18dd1b53e70b3039b2e90b508');
+  assert.match(markup, /data-command="close" aria-label="К проектам">\$\{iconMarkup\('arrow-left'\)\}<span>К проектам<\/span>/);
 });

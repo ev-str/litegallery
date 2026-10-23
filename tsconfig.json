@@ -16,6 +16,8 @@
     "skipLibCheck": true
   },
   "include": [
+    "web/app-surfaces.js",
+    "web/collage-landing.js",
     "web/collage/**/*.js",
     "web/live-refresh.js",
     "web/load-queue.js",
