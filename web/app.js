@@ -2,6 +2,7 @@ import {createCollageSelection} from './collage-selection.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
 import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
+import {createRefreshLoop} from './live-refresh.js';
 import {createLoadQueue} from './load-queue.js';
 import {createMediaWindow} from './media-window.js';
 import {pauseVideoWork, queueVideoDuration, queueVideoPreview, wakeVideoWork} from './video-posters.js';
@@ -25,6 +26,7 @@ const tvButton = document.querySelector('#tvMode');
 const recursiveToggle = document.querySelector('#recursiveToggle');
 const densityControl = document.querySelector('#gridDensity');
 const header = document.querySelector('.topbar');
+const collageEditor = document.querySelector('#collageEditor');
 const main = document.querySelector('main');
 
 const state = createGalleryState({...readPageURL(location.search), local: localStorage, session: sessionStorage});
@@ -178,6 +180,8 @@ function pauseGalleryWork(paused) {
 let loadToken = 0;
 let loadController = null;
 let skeletonTimer = 0;
+/** Entries of the listing on screen, as received; a background check that matches them changes nothing. */
+let shownListing = null;
 
 function renderSkeletons() {
   mediaWindow.clear();
@@ -258,6 +262,8 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
   state.recursive = recursive && !isRoot(path);
   updateRecursiveToggle();
   loadController?.abort();
+  liveRefresh.abort();
+  shownListing = null;
   loadController = new AbortController();
   const {signal} = loadController;
   clearTimeout(skeletonTimer);
@@ -290,10 +296,8 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
     renderBreadcrumbs();
     clearTimeout(skeletonTimer);
     delete mediaSection.dataset.loading;
-    render(data.entries);
-    emptyState.hidden = data.entries.length > 0;
-    emptyState.querySelector('span').textContent = state.recursive ? 'В этой папке и её подпапках нет фотографий и видео' : 'В этой папке нет фотографий, видео и вложенных папок';
-    statusBox.textContent = data.entries.length ? formatCount(data.entries.length, ['элемент', 'элемента', 'элементов']) : '';
+    showListing(data.entries);
+    shownListing = JSON.stringify(data.entries);
     state.shownPath = state.path;
     restoreView(state.path);
   } catch (error) {
@@ -308,9 +312,55 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
       loadController = null;
       refreshButton.classList.remove('is-busy');
       refreshButton.removeAttribute('aria-busy');
+      liveRefresh.restart();
     }
   }
 }
+
+function showListing(entries) {
+  render(entries);
+  emptyState.hidden = entries.length > 0;
+  emptyState.querySelector('span').textContent = state.recursive ? 'В этой папке и её подпапках нет фотографий и видео' : 'В этой папке нет фотографий, видео и вложенных папок';
+  statusBox.textContent = entries.length ? formatCount(entries.length, ['элемент', 'элемента', 'элементов']) : '';
+}
+
+// Background checks repeat the request of the page on screen quietly: no skeletons, no busy
+// state, no history or saved view. A load started meanwhile aborts the check, and an answer
+// for a page that has moved on is dropped. The viewer keeps the list it was opened with.
+const canCheck = () => state.shownPath !== null && state.shownPath === state.requestedPath && !collageEditor.open && !selection.active;
+
+/** @param {AbortSignal} signal aborts when a load starts or the tab is hidden */
+async function checkForChanges(signal) {
+  const token = loadToken;
+  const response = await fetch(listingURL(state.requestedPath, state.recursive), {signal});
+  if (!response.ok) throw new Error('Каталог недоступен');
+  const data = await response.json();
+  if (signal.aborted || token !== loadToken || !canCheck()) return;
+  const listing = JSON.stringify(data.entries);
+  if (listing === shownListing) return;
+  shownListing = listing;
+  updateInPlace(data.entries);
+}
+
+// Re-render the changed listing where the user is: the top tile keeps its place on screen
+// and a focused tile keeps focus, or passes it to the tile that took its place.
+function updateInPlace(entries) {
+  const top = scrollY;
+  const anchor = top > 0 ? firstVisibleItem() : undefined;
+  const anchorTop = anchor?.getBoundingClientRect().top ?? 0;
+  const focused = main.contains(document.activeElement) ? document.activeElement.closest('.gallery-item') : null;
+  const focusedMedia = focused?.classList.contains('media-card');
+  const focusIndex = focused ? (focusedMedia ? media.findIndex(item => item.path === focused.dataset.path) : [...foldersGrid.children].indexOf(focused)) : -1;
+  showListing(entries);
+  const moved = tileFor(anchor?.dataset.path);
+  scrollTo({top: moved ? scrollY + moved.getBoundingClientRect().top - anchorTop : top, behavior: 'instant'});
+  mediaWindow.sync();
+  if (!focused || document.activeElement !== document.body) return;
+  const nearest = focusedMedia ? (media.length ? mediaWindow.revealIndex(Math.min(Math.max(focusIndex, 0), media.length - 1)) : null) : foldersGrid.children[Math.min(focusIndex, foldersGrid.children.length - 1)];
+  (tileFor(focused.dataset.path) ?? nearest)?.focus({preventScroll: true});
+}
+
+const liveRefresh = createRefreshLoop({check: checkForChanges, canCheck, isHidden: () => document.hidden});
 
 // Recursive listings name every file by its path below the opened folder; a tile
 // shows that subfolder only when another file in the listing has the same name.
@@ -665,6 +715,7 @@ main.addEventListener('focusin', event => {
   if (item && state.shownPath !== null) state.saveView(state.shownPath, {focusPath: item.dataset.path});
 });
 addEventListener('pagehide', rememberView);
+document.addEventListener('visibilitychange', () => (document.hidden ? liveRefresh.hidden() : liveRefresh.visible()));
 history.scrollRestoration = 'manual';
 
 // After an interrupted navigation or a failed load the address catches up.
@@ -695,4 +746,5 @@ addEventListener('keydown', event => {
 });
 
 applyDensity();
+liveRefresh.start();
 load(state.path, {history: 'none', recursive: state.recursive});

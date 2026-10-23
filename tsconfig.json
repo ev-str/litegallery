@@ -17,6 +17,7 @@
   },
   "include": [
     "web/collage/**/*.js",
+    "web/live-refresh.js",
     "web/load-queue.js",
     "web/media-window.js",
     "web/slideshow.js"

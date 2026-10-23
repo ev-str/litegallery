@@ -149,5 +149,10 @@ export function createCollageSelection({onModeChange, getCurrentPath}) {
     hint.textContent = event.detail?.message || 'Не удалось открыть проект';
   });
 
-  return {decorateCard, handleCardClick};
+  return {
+    decorateCard,
+    handleCardClick,
+    /** Selection mode is on; the gallery then leaves the listing as it is. */
+    get active() { return active; },
+  };
 }
