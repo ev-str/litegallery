@@ -3,14 +3,19 @@ import test from 'node:test';
 
 import {createLoadQueue} from '../../web/load-queue.js';
 import {
-  createMediaWindow, neighbourIndex, rangeCovers, rangePadding, visibleRows, WINDOW_MIN_ITEMS, windowRange,
+  createMediaWindow, neighbourIndex, rangeCovers, rangePadding, rowLayout, visibleRows, WINDOW_MIN_ITEMS, windowRange,
 } from '../../web/media-window.js';
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// Rows of 100 px tiles with a 10 px gap; date headings are 30 px tall.
+const uniform = (total, columns) => rowLayout({total, columns, tile: 100, rowGap: 10});
+const grouped = (counts, columns) => rowLayout({total: counts.reduce((sum, count) => sum + count, 0), columns, tile: 100, rowGap: 10, heading: 30, groups: counts.map((count, index) => ({label: `G${index}`, count}))});
+
 test('visible rows follow the band and include partly visible rows', () => {
-  // Rows of 100 px with a 10 px gap: row r spans [110 r, 110 r + 100).
-  const rows = (top, bottom) => visibleRows({rows: 50, tile: 100, pitch: 110, top, bottom});
+  // Row r spans [110 r, 110 r + 100).
+  const layout = uniform(50, 1);
+  const rows = (top, bottom) => visibleRows(layout, top, bottom);
   assert.deepEqual(rows(0, 500), {first: 0, last: 4});
   assert.deepEqual(rows(105, 215), {first: 1, last: 1});
   assert.deepEqual(rows(99, 221), {first: 0, last: 2});
@@ -18,43 +23,93 @@ test('visible rows follow the band and include partly visible rows', () => {
   assert.deepEqual(rows(10_000, 10_500), {first: 49, last: 49});
 });
 
+test('a grouped layout starts every group with a heading row and a new tile row', () => {
+  // Groups of 3, 7, and 2 items in 5 columns: H0, [0-2], H1, [3-7], [8-9], H2, [10-11].
+  const layout = grouped([3, 7, 2], 5);
+  assert.equal(layout.rows, 7);
+  assert.deepEqual([...layout.heading], [1, 0, 1, 0, 0, 1, 0]);
+  assert.deepEqual([...layout.itemStart], [0, 0, 3, 3, 8, 10, 10, 12]);
+  assert.deepEqual([...layout.top], [0, 40, 150, 190, 300, 410, 450]);
+  assert.deepEqual([...layout.group], [0, 0, 1, 1, 1, 2, 2]);
+  assert.deepEqual([...layout.groupRow], [0, 2, 5]);
+  assert.equal(layout.height, 550);
+  assert.equal(layout.itemRow[7], 3);
+  assert.equal(layout.itemRow[8], 4);
+  // A band that starts inside the heading of group 1 sees that heading first.
+  assert.deepEqual(visibleRows(layout, 160, 320), {first: 2, last: 4});
+  assert.deepEqual(visibleRows(layout, 135, 150), {first: 1, last: 1});
+});
+
+test('a short row is as tall as the tracks it fills, not the widest track', () => {
+  // Subpixel tracks: the middle column is the widest. Groups of 7 in 3 columns end with a one-tile row.
+  const layout = rowLayout({total: 14, columns: 3, tile: 100.5, tracks: [100, 100.5, 100], rowGap: 10, heading: 30, groups: [{label: 'G0', count: 7}, {label: 'G1', count: 7}]});
+  assert.deepEqual([...layout.size], [30, 100.5, 100.5, 100, 30, 100.5, 100.5, 100]);
+  assert.equal(layout.top[4], 30 + 100.5 + 100.5 + 100 + 4 * 10);
+  // Without measured tracks every row is a tile tall.
+  assert.deepEqual([...rowLayout({total: 4, columns: 3, tile: 100.5, rowGap: 10}).size], [100.5, 100.5]);
+});
+
 test('the window is row-aligned, padded by extra rows, and clamped to the list', () => {
-  assert.deepEqual(windowRange({total: 1000, columns: 5, visible: {first: 10, last: 14}, extra: 3}), {start: 35, end: 90});
-  assert.deepEqual(windowRange({total: 1000, columns: 5, visible: {first: 1, last: 2}, extra: 3}), {start: 0, end: 30});
-  assert.deepEqual(windowRange({total: 1003, columns: 5, visible: {first: 199, last: 200}, extra: 3}), {start: 980, end: 1003});
+  assert.deepEqual(windowRange({rows: 200, visible: {first: 10, last: 14}, extra: 3}), {start: 7, end: 18});
+  assert.deepEqual(windowRange({rows: 200, visible: {first: 1, last: 2}, extra: 3}), {start: 0, end: 6});
+  assert.deepEqual(windowRange({rows: 201, visible: {first: 199, last: 200}, extra: 3}), {start: 196, end: 201});
 });
 
 test('the rendered range is kept while it covers the visible rows with a margin', () => {
-  const covers = (range, visible) => rangeCovers({range, total: 1000, columns: 5, visible, margin: 2});
-  assert.equal(covers({start: 35, end: 90}, {first: 10, last: 14}), true);
-  assert.equal(covers({start: 35, end: 90}, {first: 8, last: 12}), false);
-  assert.equal(covers({start: 35, end: 90}, {first: 13, last: 16}), false);
-  assert.equal(covers({start: 0, end: 30}, {first: 0, last: 3}), true);
-  assert.equal(covers({start: 950, end: 1000}, {first: 197, last: 199}), true);
+  const covers = (range, visible) => rangeCovers({range, rows: 200, visible, margin: 2});
+  assert.equal(covers({start: 7, end: 18}, {first: 10, last: 14}), true);
+  assert.equal(covers({start: 7, end: 18}, {first: 8, last: 12}), false);
+  assert.equal(covers({start: 7, end: 18}, {first: 13, last: 16}), false);
+  assert.equal(covers({start: 0, end: 6}, {first: 0, last: 3}), true);
+  assert.equal(covers({start: 190, end: 200}, {first: 197, last: 199}), true);
   assert.equal(covers({start: 0, end: 0}, {first: 0, last: 0}), false);
 });
 
 test('padding and rendered rows add up to the height of the whole grid', () => {
-  for (const [total, columns, range] of [[1000, 5, {start: 35, end: 90}], [1003, 7, {start: 994, end: 1003}], [400, 3, {start: 0, end: 60}]]) {
-    const {top, bottom} = rangePadding({range, total, columns, pitch: 110});
-    const renderedRows = Math.ceil(range.end / columns) - Math.floor(range.start / columns);
-    assert.equal(top + renderedRows * 110 + bottom, Math.ceil(total / columns) * 110);
+  const cases = [[uniform(1000, 5), {start: 7, end: 18}], [uniform(1003, 7), {start: 142, end: 144}], [uniform(400, 3), {start: 0, end: 20}], [grouped([3, 7, 2], 5), {start: 2, end: 5}], [grouped([3, 7, 2], 5), {start: 4, end: 7}]];
+  for (const [layout, range] of cases) {
+    const {top, bottom} = rangePadding(layout, range);
+    let rendered = 0;
+    for (let row = range.start; row < range.end; row++) rendered += layout.size[row] + (row > range.start ? 10 : 0);
+    assert.equal(top + rendered + bottom, layout.height);
+    assert.equal(top, layout.top[range.start]);
   }
+  // Uniform rows keep the arithmetic of a plain grid.
+  assert.deepEqual(rangePadding(uniform(1000, 5), {start: 7, end: 18}), {top: 7 * 110, bottom: (200 - 18) * 110});
 });
 
 test('arrow keys move through the list and stop at the grid edges', () => {
   // 12 items in 5 columns: rows 0-4, 5-9, 10-11.
-  assert.equal(neighbourIndex(6, 'ArrowRight', 5, 12), 7);
-  assert.equal(neighbourIndex(4, 'ArrowRight', 5, 12), null);
-  assert.equal(neighbourIndex(11, 'ArrowRight', 5, 12), null);
-  assert.equal(neighbourIndex(5, 'ArrowLeft', 5, 12), null);
-  assert.equal(neighbourIndex(6, 'ArrowLeft', 5, 12), 5);
-  assert.equal(neighbourIndex(3, 'ArrowUp', 5, 12), null);
-  assert.equal(neighbourIndex(8, 'ArrowUp', 5, 12), 3);
-  assert.equal(neighbourIndex(6, 'ArrowDown', 5, 12), 11);
-  assert.equal(neighbourIndex(8, 'ArrowDown', 5, 12), 11);
-  assert.equal(neighbourIndex(11, 'ArrowDown', 5, 12), null);
-  assert.equal(neighbourIndex(3, 'Enter', 5, 12), null);
+  const layout = uniform(12, 5);
+  const move = (index, key) => neighbourIndex(layout, index, key);
+  assert.equal(move(6, 'ArrowRight'), 7);
+  assert.equal(move(4, 'ArrowRight'), null);
+  assert.equal(move(11, 'ArrowRight'), null);
+  assert.equal(move(5, 'ArrowLeft'), null);
+  assert.equal(move(6, 'ArrowLeft'), 5);
+  assert.equal(move(3, 'ArrowUp'), null);
+  assert.equal(move(8, 'ArrowUp'), 3);
+  assert.equal(move(6, 'ArrowDown'), 11);
+  assert.equal(move(8, 'ArrowDown'), 11);
+  assert.equal(move(11, 'ArrowDown'), null);
+  assert.equal(move(3, 'Enter'), null);
+});
+
+test('arrow keys cross group headings and keep the column where the row allows', () => {
+  // H0, [0-2], H1, [3-7], [8-9], H2, [10-11].
+  const layout = grouped([3, 7, 2], 5);
+  const move = (index, key) => neighbourIndex(layout, index, key);
+  assert.equal(move(1, 'ArrowDown'), 4);
+  assert.equal(move(2, 'ArrowDown'), 5);
+  assert.equal(move(2, 'ArrowRight'), null, 'a group ends its row');
+  assert.equal(move(3, 'ArrowLeft'), null);
+  assert.equal(move(7, 'ArrowDown'), 9);
+  assert.equal(move(9, 'ArrowDown'), 11);
+  assert.equal(move(10, 'ArrowUp'), 8);
+  assert.equal(move(3, 'ArrowUp'), 0);
+  assert.equal(move(4, 'ArrowUp'), 1);
+  assert.equal(move(0, 'ArrowUp'), null);
+  assert.equal(move(11, 'ArrowDown'), null);
 });
 
 test('the load queue bounds concurrency and starts the lowest priority first', async () => {
@@ -162,11 +217,14 @@ function fakePage() {
   const listeners = new Map();
   const saved = {};
   const globals = {
-    document: {createDocumentFragment: () => new FakeFragment(), get activeElement() { return page.focused; }},
+    document: {createDocumentFragment: () => new FakeFragment(), createElement: name => new FakeElement(name), get activeElement() { return page.focused; }},
     // An empty grid reports stale track sizes, as WebKit does.
     getComputedStyle: () => {
       const track = grid.childNodes.length ? `${page.tileHeight}px` : '117px';
-      return {gridTemplateColumns: Array(page.columns).fill(track).join(' '), columnGap: '10px', rowGap: '10px'};
+      return {
+        gridTemplateColumns: Array(page.columns).fill(track).join(' '), columnGap: '10px', rowGap: '10px',
+        getPropertyValue: name => (name === '--date-heading-height' ? '30px' : ''),
+      };
     },
     innerHeight: 500,
     addEventListener: (type, listener) => listeners.set(type, listener),
@@ -190,12 +248,16 @@ function fakePage() {
   return page;
 }
 
-function setup(total, {tileHeight = 100} = {}) {
+function setup(total, {tileHeight = 100, groups = null} = {}) {
   const page = fakePage();
   page.tileHeight = tileHeight;
   const signals = new Map();
+  const sticky = new FakeElement('sticky');
+  sticky.hidden = true;
+  page.sticky = sticky;
   const view = createMediaWindow({
     grid: page.grid,
+    stickyHeading: sticky,
     createCard: (item, index, {signal}) => {
       const card = new FakeElement(item.path);
       card.index = index;
@@ -203,8 +265,8 @@ function setup(total, {tileHeight = 100} = {}) {
       return card;
     },
   });
-  view.setItems(Array.from({length: total}, (_, index) => ({path: `item-${index}`})));
-  const indices = () => page.grid.childNodes.map(card => card.index);
+  view.setItems(Array.from({length: total}, (_, index) => ({path: `item-${index}`})), groups);
+  const indices = () => page.grid.childNodes.filter(node => node.index !== undefined).map(card => card.index);
   return {page, view, signals, indices};
 }
 
@@ -339,4 +401,100 @@ test('lists up to the threshold render whole; clear drops every card', t => {
   assert.equal(page.grid.childNodes.length, 0);
   assert.equal(signals.get(0).aborted, true);
   assert.equal(page.grid.attributes.get('aria-live'), 'polite');
+});
+
+// Groups of 7 items in 4 columns: a 30 px heading, a full row, and a row of 3.
+// Every group takes 30 + 10 + 2 * 110 = 260 px.
+const GROUP_SIZE = 7;
+const sevens = total => Array.from({length: Math.ceil(total / GROUP_SIZE)}, (_, index) => ({label: `G${index}`, count: Math.min(GROUP_SIZE, total - index * GROUP_SIZE)}));
+const GROUP_PITCH = 260;
+
+/** Item indices of the cards in DOM order. */
+const indices = page => page.grid.childNodes.filter(node => node.index !== undefined).map(card => card.index);
+
+/** Headings and cards of the grid in DOM order, as 'H<group>' and item indices. */
+const sequence = page => page.grid.childNodes.map(node => (node.index === undefined ? node.textContent : node.index));
+
+test('a grouped large list keeps a bounded window of headings and cards in list order', t => {
+  const {page, view, signals} = setup(5000, {groups: sevens(5000)});
+  t.after(page.restore);
+  assert.equal(view.windowed, true);
+  assert.equal(page.grid.classList.contains('is-grouped'), true);
+  const first = sequence(page);
+  assert.deepEqual(first.slice(0, 9), ['G0', 0, 1, 2, 3, 4, 5, 6, 'G1']);
+
+  page.scrollTo(200 + 400 * GROUP_PITCH);
+  const nodes = sequence(page);
+  assert.ok(nodes.length <= 4 * 20, `window of ${nodes.length} nodes`);
+  // Every heading directly precedes the first item of its group, items ascend without gaps.
+  const items = nodes.filter(node => typeof node === 'number');
+  assert.deepEqual(items, Array.from({length: items.length}, (_, index) => items[0] + index));
+  nodes.forEach((node, at) => {
+    if (typeof node === 'number') return;
+    assert.equal(nodes[at + 1], Number(node.slice(1)) * GROUP_SIZE, `${node} precedes its first item`);
+  });
+  assert.ok(items.includes(400 * GROUP_SIZE));
+  // The padding stands in for whole groups above the rendered rows.
+  const firstRendered = page.grid.childNodes[0];
+  const firstGroup = firstRendered.index === undefined ? Number(firstRendered.textContent.slice(1)) : Math.floor(firstRendered.index / GROUP_SIZE);
+  const offset = firstRendered.index === undefined ? 0 : firstRendered.index % GROUP_SIZE < 4 ? 40 : 150;
+  assert.equal(page.grid.style.paddingTop, `${firstGroup * GROUP_PITCH + offset}px`);
+  assert.equal(signals.get(0).aborted, true);
+
+  page.scrollTo(200 + 714 * GROUP_PITCH + 500);
+  assert.equal(indices(page).at(-1), 4999);
+  assert.equal(page.grid.style.paddingBottom, '');
+});
+
+test('the sticky heading names the group at the top of the viewport and hides above the grid', t => {
+  const {page} = setup(5000, {groups: sevens(5000)});
+  t.after(page.restore);
+  assert.equal(page.sticky.hidden, true, 'the grid top is below the chrome');
+  // Scrolled into the second row of group 12.
+  page.scrollTo(200 + 12 * GROUP_PITCH + 160);
+  assert.equal(page.sticky.hidden, false);
+  assert.equal(page.sticky.textContent, 'G12');
+  // The heading of group 13 reaches the top.
+  page.scrollTo(200 + 13 * GROUP_PITCH + 5);
+  assert.equal(page.sticky.textContent, 'G13');
+  page.scrollTo(0);
+  assert.equal(page.sticky.hidden, true);
+});
+
+test('a grouped list pins a far card at its own cell and moves across headings', t => {
+  const {page, view} = setup(5000, {groups: sevens(5000)});
+  t.after(page.restore);
+  // Item 7 * 300 + 5 is in group 300, second row, column 1.
+  const far = view.reveal(`item-${300 * GROUP_SIZE + 5}`);
+  assert.equal(far.classList.contains('is-window-pinned'), true);
+  assert.equal(far.style.top, `${300 * GROUP_PITCH + 150}px`);
+  assert.equal(far.style.left, '110px');
+  const nodes = sequence(page);
+  assert.equal(nodes.at(-1), 300 * GROUP_SIZE + 5, 'a pinned card follows the rendered rows in DOM order');
+  // Down from the short row of a group lands in the next group's first row.
+  assert.equal(view.neighbour(far, 'ArrowDown').index, 301 * GROUP_SIZE + 1);
+  assert.equal(view.neighbour(far, 'ArrowUp').index, 300 * GROUP_SIZE + 1);
+});
+
+test('relayout keeps the first item of a grouped top row in place', t => {
+  const {page, view} = setup(5000, {groups: sevens(5000)});
+  t.after(page.restore);
+  // The top row is the second row of group 100: items 704-706.
+  page.scrollTo(200 + 100 * GROUP_PITCH + 150);
+  page.columns = 7;
+  view.relayout();
+  // With 7 columns a group is a heading and one row: 30 + 10 + 110 = 150 px; item 704 is in group 100's row.
+  assert.equal(page.scrollY, 200 + 100 * 150 + 40);
+  assert.ok(indices(page).includes(704));
+});
+
+test('a small grouped list renders whole with every heading; groups that miss items are ignored', t => {
+  const {page, view} = setup(20, {groups: sevens(20)});
+  t.after(page.restore);
+  assert.deepEqual(sequence(page), ['G0', 0, 1, 2, 3, 4, 5, 6, 'G1', 7, 8, 9, 10, 11, 12, 13, 'G2', 14, 15, 16, 17, 18, 19]);
+  view.setItems(Array.from({length: 5}, (_, index) => ({path: `next-${index}`})), [{label: 'G0', count: 4}]);
+  assert.deepEqual(sequence(page), [0, 1, 2, 3, 4]);
+  assert.equal(page.grid.classList.contains('is-grouped'), false);
+  view.clear();
+  assert.equal(page.sticky.hidden, true);
 });

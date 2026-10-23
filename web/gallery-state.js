@@ -4,6 +4,8 @@
 // The recursive mode of a folder is part of its view and of the page address;
 // the library root never lists recursively.
 
+import {GROUP_STORAGE_KEY, normalizeGroupMode} from './date-groups.js';
+
 export const DENSITY_CHOICES = {desktop: [3, 5, 7], phone: [1, 2, 3]};
 export const DEFAULT_DENSITY = {desktop: 5, phone: 2};
 export const VIEWS_KEY = 'gallery-views';
@@ -59,6 +61,8 @@ export function createGalleryState({path = '', recursive = false, local, session
     filter: filter === 'image' || filter === 'video' ? filter : 'all',
     descending: local.getItem('gallery-media-order') !== 'asc',
     folderDescending: local.getItem('gallery-folder-order') !== 'asc',
+    /** Date grouping of the media list. @type {import('./date-groups.js').GroupMode} */
+    groupBy: normalizeGroupMode(local.getItem(GROUP_STORAGE_KEY)),
     /** Media item opened in the viewer; focus returns to its tile. @type {OpenedItem|null} */
     lastOpened: null,
 
@@ -82,6 +86,11 @@ export function createGalleryState({path = '', recursive = false, local, session
       if (value !== 'date' && value !== 'name') return;
       state.sortKey = value;
       local.setItem('gallery-media-sort', value);
+    },
+    /** @param {string} value */
+    setGroupBy(value) {
+      state.groupBy = normalizeGroupMode(value);
+      local.setItem(GROUP_STORAGE_KEY, state.groupBy);
     },
     toggleDescending() {
       state.descending = !state.descending;

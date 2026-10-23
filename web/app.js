@@ -1,6 +1,7 @@
 import {createSurfaces, routeSurfaceEntries} from './app-surfaces.js';
 import {createCollageLanding} from './collage-landing.js';
 import {createCollageSelection} from './collage-selection.js';
+import {groupMedia, groupRuns} from './date-groups.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
 import {createGalleryStatus} from './gallery-status.js';
 import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
@@ -25,6 +26,7 @@ const folderSort = document.querySelector('#folderSort');
 const mediaSort = document.querySelector('#mediaSort');
 const mediaDirection = document.querySelector('#mediaDirection');
 const mediaFilter = document.querySelector('#mediaFilter');
+const mediaGroup = document.querySelector('#mediaGroup');
 const emptyState = document.querySelector('#emptyState');
 const refreshButton = document.querySelector('#refresh');
 const tvButton = document.querySelector('#tvMode');
@@ -39,6 +41,8 @@ const state = createGalleryState({...readPageURL(location.search), local: localS
 let directories = [];
 let allMedia = [];
 let media = [];
+/** Date groups of `media`, in its order; null without grouping. */
+let mediaGroups = null;
 /** Header control or memories card that opened the viewer; null when a tile did. */
 let viewerOpener = null;
 
@@ -210,6 +214,7 @@ const mediaWindow = createMediaWindow({
   grid: mediaGrid,
   createCard: createMediaCard,
   viewportTop: () => header.getBoundingClientRect().bottom,
+  stickyHeading: document.querySelector('#mediaGroupHeading'),
   onChange: () => {
     thumbnails.wake();
     wakeVideoWork();
@@ -224,10 +229,12 @@ const search = createSearch({
   scope: document.querySelector('#searchScope'),
   empty: document.querySelector('#searchEmpty'),
   grid: document.querySelector('#searchGrid'),
+  heading: document.querySelector('#searchGroupHeading'),
   // null while a listing loads; a failed load leaves nothing to search.
   getItems: () => (state.shownPath !== null ? media : loadController ? null : []),
   getScope: () => ({folder: state.shownPath ?? state.requestedPath, recursive: state.recursive, filter: state.filter}),
   createCard: (item, index, work) => createMediaCard(item, index, work, 'search'),
+  getGroups: results => groupRuns(results, state.groupBy),
   viewportTop: () => header.getBoundingClientRect().bottom,
   onChange: () => {
     thumbnails.wake();
@@ -259,6 +266,7 @@ function updateSortButton(button, descending) {
 
 function updateMediaControls() {
   mediaSort.value = state.sortKey;
+  mediaGroup.value = state.groupBy;
   mediaFilter.querySelectorAll('[data-filter]').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.filter === state.filter));
   });
@@ -271,7 +279,8 @@ function updateMediaControls() {
 
 function applyMediaView() {
   const filtered = allMedia.filter(item => state.filter === 'all' || item.kind === state.filter);
-  media = sortMedia(filtered);
+  // Grouping reorders whole groups only; viewer, TV, and Найти get this visual order.
+  ({items: media, groups: mediaGroups} = groupMedia(sortMedia(filtered), state.groupBy, state.descending));
   renderMedia(media);
   search.refresh();
   syncTvButton();
@@ -386,7 +395,7 @@ function updateInPlace(entries) {
   const focusIndex = focused ? (focusedMedia ? media.findIndex(item => item.path === focused.dataset.path) : [...foldersGrid.children].indexOf(focused)) : -1;
   showListing(entries);
   const moved = tileFor(anchor?.dataset.path);
-  scrollTo({top: moved ? scrollY + moved.getBoundingClientRect().top - anchorTop : top, behavior: 'instant'});
+  scrollTo({top: moved ? Math.round(scrollY + moved.getBoundingClientRect().top - anchorTop) : top, behavior: 'instant'});
   mediaWindow.sync();
   if (!focused || document.activeElement !== document.body) return;
   const nearest = focusedMedia ? (media.length ? mediaWindow.revealIndex(Math.min(Math.max(focusIndex, 0), media.length - 1)) : null) : foldersGrid.children[Math.min(focusIndex, foldersGrid.children.length - 1)];
@@ -478,7 +487,7 @@ function renderMedia(items) {
     mediaGrid.append(empty);
     return;
   }
-  mediaWindow.setItems(items);
+  mediaWindow.setItems(items, mediaGroups);
 }
 
 /**
@@ -618,7 +627,8 @@ function rememberView() {
 function restoreView(path) {
   const view = state.view(path);
   const anchor = tileFor(view?.anchorPath);
-  const top = anchor ? scrollY + anchor.getBoundingClientRect().top - view.anchorOffset : view?.scrollY ?? 0;
+  // Rounded: WebKit truncates a fractional scroll, which would move the view up a pixel per restore.
+  const top = anchor ? Math.round(scrollY + anchor.getBoundingClientRect().top - view.anchorOffset) : view?.scrollY ?? 0;
   scrollTo({top, behavior: 'instant'});
   mediaWindow.sync();
   // The grids were rebuilt, so focus that was on a tile is lost; other focus stays.
@@ -719,6 +729,11 @@ folderSort.addEventListener('click', () => keepInPlace(foldersHeading, () => {
 
 mediaSort.addEventListener('change', () => keepInPlace(mediaHeading, () => {
   state.setSortKey(mediaSort.value);
+  applyMediaView();
+}));
+
+mediaGroup.addEventListener('change', () => keepInPlace(mediaHeading, () => {
+  state.setGroupBy(mediaGroup.value);
   applyMediaView();
 }));
 

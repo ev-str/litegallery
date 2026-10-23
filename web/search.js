@@ -9,6 +9,8 @@ import {formatCount} from './format.js';
 import {iconMarkup} from './icons.js';
 import {createMediaWindow} from './media-window.js';
 
+/** @typedef {import('./media-window.js').ItemGroup} ItemGroup */
+
 /**
  * @typedef {{name: string, path: string, kind: string}} SearchItem
  * @typedef {{folder: string, recursive: boolean}} SearchScope folder is the opened folder, '' for the root
@@ -81,8 +83,9 @@ export function describeEmpty({count, total, query, recursive, folder, filter}) 
  * @typedef {{signal: AbortSignal, priority: () => number}} CardWork
  * @typedef {{
  *   panel: HTMLElement, input: HTMLInputElement, clear: HTMLButtonElement, count: HTMLElement,
- *   scope: HTMLElement, empty: HTMLElement, grid: HTMLElement,
+ *   scope: HTMLElement, empty: HTMLElement, grid: HTMLElement, heading?: HTMLElement | null,
  * }} SearchElements
+ *   heading is the sticky copy of the date heading at the top of the results
  */
 
 /**
@@ -93,15 +96,18 @@ export function describeEmpty({count, total, query, recursive, folder, filter}) 
  *   getItems: () => T[] | null,
  *   getScope: () => SearchScope & {filter: 'all'|'image'|'video'},
  *   createCard: (item: T, index: number, work: CardWork) => HTMLElement,
+ *   getGroups?: (results: T[]) => ItemGroup[] | null,
  *   viewportTop?: () => number,
  *   onChange?: () => void,
  *   onResults?: (results: T[]) => void,
  * }} options
  *   getItems returns the gallery's visible list, or null while it is loading.
+ *   getGroups splits the results into the gallery's date groups; the results keep
+ *   the gallery order, so its groups stay consecutive.
  *   onChange runs after the rendered rows change; onResults after a new result list.
  */
-export function createSearch({panel, input, clear, count, scope, empty, grid, getItems, getScope, createCard, viewportTop, onChange, onResults = () => {}}) {
-  const renderer = createMediaWindow({grid, createCard, viewportTop, onChange});
+export function createSearch({panel, input, clear, count, scope, empty, grid, heading = null, getItems, getScope, createCard, getGroups = () => null, viewportTop, onChange, onResults = () => {}}) {
+  const renderer = createMediaWindow({grid, createCard, viewportTop, onChange, stickyHeading: heading});
   /** @type {T[]} */
   let results = [];
   /** @type {T[] | null} */
@@ -140,7 +146,7 @@ export function createSearch({panel, input, clear, count, scope, empty, grid, ge
       /** @type {HTMLElement} */ (empty.querySelector('span')).textContent = message.hint;
       renderer.clear();
     } else {
-      renderer.setItems(results);
+      renderer.setItems(results, getGroups(results));
     }
     onResults(results);
     return true;

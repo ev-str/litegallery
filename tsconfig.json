@@ -24,6 +24,7 @@
     "web/live-refresh.js",
     "web/memories.js",
     "web/load-queue.js",
+    "web/date-groups.js",
     "web/media-window.js",
     "web/search.js",
     "web/slideshow.js"
