@@ -83,8 +83,8 @@ type WarmError struct {
 	Error     string    `json:"error"`
 }
 
-// MemoriesStatus is published by a future memories builder. Counters stay
-// absent until a builder reports them.
+// MemoriesStatus is published by the memories builder after each date index
+// build. Counters stay absent until a builder reports them.
 type MemoriesStatus struct {
 	State        string     `json:"state"`
 	UpdatedAt    *time.Time `json:"updatedAt,omitempty"`
@@ -332,6 +332,15 @@ func sanitizeWarmError(err error, root string, cache []string) string {
 	if err == nil {
 		return ""
 	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		parts := make([]string, 0, len(joined.Unwrap()))
+		for _, part := range joined.Unwrap() {
+			if text := sanitizeWarmError(part, root, cache); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		err = errors.New(strings.Join(parts, "; "))
+	}
 	text := err.Error()
 	var pathErr *fs.PathError
 	var linkErr *os.LinkError
@@ -415,9 +424,21 @@ func validCacheStatus(cache CacheStatus) bool {
 }
 
 // warmArtifactsReady reports whether a min-interval skip may keep the current
-// artifacts: a valid date index and a succeeded status with a valid cache block.
+// artifacts as one consistent set: a valid date index, a memories artifact
+// built from that index, a ready memories status for that artifact, and a
+// succeeded warm status with a valid cache block.
 func (s *Server) warmArtifactsReady() bool {
-	if _, ok := s.readDateIndex(); !ok {
+	index, ok := s.readDateIndex()
+	if !ok {
+		return false
+	}
+	memories, ok := s.readMemoriesArtifact()
+	if !ok || memories.DateIndexVersion != index.Version || !memories.DateIndexGeneratedAt.Equal(index.GeneratedAt) {
+		return false
+	}
+	memoriesStatus, ok := s.readMemoriesStatusFile()
+	if !ok || memoriesStatus.State != statusReady || memoriesStatus.ReadyVersion != memories.Revision ||
+		memoriesStatus.ReadyAt == nil || !memoriesStatus.ReadyAt.Equal(memories.GeneratedAt) {
 		return false
 	}
 	status, ok := s.readWarmStatusFile()
@@ -429,20 +450,32 @@ func fresh(now, updated time.Time) bool {
 	return age <= warmStatusStaleAfter && age >= -warmStatusStaleAfter
 }
 
-func (s *Server) memoriesStatus(now time.Time) MemoriesStatus {
-	unavailable := MemoriesStatus{State: statusUnavailable}
+func (s *Server) readMemoriesStatusFile() (memoriesStatusFile, bool) {
 	data, err := os.ReadFile(s.memoriesStatusPath())
 	if err != nil {
-		return unavailable
+		return memoriesStatusFile{}, false
 	}
 	var file memoriesStatusFile
 	if json.Unmarshal(data, &file) != nil || file.Version != memoriesStatusVersion || file.UpdatedAt == nil {
-		return unavailable
+		return memoriesStatusFile{}, false
 	}
 	for _, counter := range []*int{file.Periods, file.Memories, file.Shown, file.Errors} {
 		if counter != nil && *counter < 0 {
-			return unavailable
+			return memoriesStatusFile{}, false
 		}
+	}
+	switch file.State {
+	case statusRunning, statusReady, runFailed:
+	default:
+		return memoriesStatusFile{}, false
+	}
+	return file, true
+}
+
+func (s *Server) memoriesStatus(now time.Time) MemoriesStatus {
+	file, ok := s.readMemoriesStatusFile()
+	if !ok {
+		return MemoriesStatus{State: statusUnavailable}
 	}
 	status := file.MemoriesStatus
 	switch status.State {
@@ -450,11 +483,8 @@ func (s *Server) memoriesStatus(now time.Time) MemoriesStatus {
 		if !fresh(now, *status.UpdatedAt) {
 			status.State = statusUnavailable
 		}
-	case statusReady:
 	case runFailed:
 		status.State = statusUnavailable
-	default:
-		return unavailable
 	}
 	return status
 }
@@ -491,14 +521,19 @@ func (s *Server) galleryStatus(now time.Time) GalleryStatus {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	writeNoStoreJSON(w, r, func() any { return s.galleryStatus(time.Now()) })
+}
+
+// writeNoStoreJSON serves a read-only GET/HEAD JSON document.
+func writeNoStoreJSON(w http.ResponseWriter, r *http.Request, value func() any) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	data, err := json.Marshal(s.galleryStatus(time.Now()))
+	data, err := json.Marshal(value())
 	if err != nil {
-		http.Error(w, "cannot encode status", http.StatusInternalServerError)
+		http.Error(w, "cannot encode response", http.StatusInternalServerError)
 		return
 	}
 	data = append(data, '\n')

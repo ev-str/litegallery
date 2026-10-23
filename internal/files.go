@@ -93,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/exif", s.handleEXIF)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/status", s.handleStatus)
+	mux.HandleFunc("/api/memories", s.handleMemories)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))

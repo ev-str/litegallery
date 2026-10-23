@@ -332,10 +332,16 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 		}
 	}
 	scanned := time.Now()
-	if err := s.writeDateIndex(s.buildDateIndex(manifests, scanned)); err != nil {
+	index := s.buildDateIndex(manifests, scanned)
+	if err := s.writeDateIndex(index); err != nil {
 		stats.Errors++
 		report("date-index", "", err)
 		return stats, fmt.Errorf("write date index: %w", err)
+	}
+	// Memories are optional: a failure is reported but keeps the run successful.
+	status.update("memories", stats, len(jobs))
+	if err := s.refreshMemories(index, time.Now()); err != nil {
+		report("memories", "", err)
 	}
 	cache := &CacheStatus{
 		MediaFiles:            stats.Media,

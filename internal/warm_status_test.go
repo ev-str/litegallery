@@ -723,7 +723,7 @@ func TestWarmCacheMinIntervalSkipsWithValidArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	stamp := filepath.Join(cache, ".warm-success")
-	paths := []string{s.dateIndexPath(), s.warmStatusPath(), stamp}
+	paths := []string{s.dateIndexPath(), s.warmStatusPath(), s.memoriesPath(), s.memoriesStatusPath(), stamp}
 	before := make(map[string][]byte)
 	modTimes := make(map[string]time.Time)
 	for _, path := range paths {
