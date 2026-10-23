@@ -235,7 +235,10 @@ func TestWarmCacheBuildsMemoriesWithoutAbsolutePaths(t *testing.T) {
 	}
 }
 
-func TestWarmCacheMemoriesFailureKeepsLastArtifact(t *testing.T) {
+// A failed memories build keeps the last known good artifact: /api/status
+// reports the failed build as unavailable with the last ready version, while
+// /api/memories keeps serving that version as ready.
+func TestWarmCacheMemoriesFailureKeepsLastKnownGood(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}
@@ -259,7 +262,7 @@ func TestWarmCacheMemoriesFailureKeepsLastArtifact(t *testing.T) {
 	writeMemoriesTrip(t, root, 6)
 	var reported []string
 	stats, err := s.WarmCache(context.Background(), WarmOptions{Workers: 1, OnError: func(operation, _ string, _ error) { reported = append(reported, operation) }})
-	if err != nil || stats.Media != 6 {
+	if err != nil || stats.Media != 6 || stats.Errors != 1 {
 		t.Fatalf("warm failed: %+v %v", stats, err)
 	}
 	if got := readFileBytes(t, s.memoriesPath()); string(got) != string(good) {
@@ -270,6 +273,9 @@ func TestWarmCacheMemoriesFailureKeepsLastArtifact(t *testing.T) {
 	}
 	status := decodeStatus(t, s)
 	memories := status.Memories
+	if status.Run.State != runSucceeded || status.Run.Errors != 1 {
+		t.Fatalf("run = %+v", status.Run)
+	}
 	if status.State != statusReady || memories.State != statusUnavailable || memories.Errors == nil || *memories.Errors != 1 ||
 		memories.ReadyVersion != goodArtifact.Revision || memories.ReadyAt == nil || !memories.ReadyAt.Equal(goodArtifact.GeneratedAt) {
 		t.Fatalf("status = %+v memories = %+v", status, memories)
@@ -282,7 +288,9 @@ func TestWarmCacheMemoriesFailureKeepsLastArtifact(t *testing.T) {
 			t.Fatalf("error text leaks %q: %q", private, status.RecentErrors[0].Error)
 		}
 	}
-	if document := decodeMemories(t, s); document.State != statusReady || document.Revision != goodArtifact.Revision {
+	document := decodeMemories(t, s)
+	if document.State != statusReady || document.Revision != goodArtifact.Revision || document.GeneratedAt == nil ||
+		!document.GeneratedAt.Equal(goodArtifact.GeneratedAt) || !reflect.DeepEqual(document.Events, goodArtifact.Events) {
 		t.Fatalf("memories endpoint = %+v", document)
 	}
 
@@ -296,6 +304,9 @@ func TestWarmCacheMemoriesFailureKeepsLastArtifact(t *testing.T) {
 	artifact, ok := s.readMemoriesArtifact()
 	if !ok || artifact.Events[0].MediaCount != 6 || recovered.State != statusReady || *recovered.Errors != 0 || recovered.ReadyVersion != artifact.Revision {
 		t.Fatalf("recovered = %+v artifact = %+v", recovered, artifact)
+	}
+	if run := decodeStatus(t, s).Run; run.State != runSucceeded || run.Errors != 0 {
+		t.Fatalf("recovered run = %+v", run)
 	}
 }
 
@@ -401,7 +412,7 @@ func TestWarmCacheMemoriesStatusWriteFailure(t *testing.T) {
 		}
 		reported = append(reported, err)
 	}})
-	if err != nil || stats.Media != 6 {
+	if err != nil || stats.Media != 6 || stats.Errors != 1 {
 		t.Fatalf("warm failed: %+v %v", stats, err)
 	}
 	if len(reported) != 1 || !strings.Contains(reported[0].Error(), "write memories status") {
@@ -412,7 +423,8 @@ func TestWarmCacheMemoriesStatusWriteFailure(t *testing.T) {
 		t.Fatalf("artifact = %+v %v", artifact, ok)
 	}
 	status := decodeStatus(t, s)
-	if status.State != statusReady || len(status.RecentErrors) != 1 || status.RecentErrors[0].Operation != "memories" || status.Memories.State != statusUnavailable {
+	if status.State != statusReady || status.Run.State != runSucceeded || status.Run.Errors != 1 ||
+		len(status.RecentErrors) != 1 || status.RecentErrors[0].Operation != "memories" || status.Memories.State != statusUnavailable {
 		t.Fatalf("status = %+v", status)
 	}
 	for _, private := range append(cachePathForms(cache), root) {

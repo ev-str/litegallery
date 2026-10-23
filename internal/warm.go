@@ -341,6 +341,7 @@ func (s *Server) WarmCache(ctx context.Context, options WarmOptions) (stats Warm
 	// Memories are optional: a failure is reported but keeps the run successful.
 	status.update("memories", stats, len(jobs))
 	if err := s.refreshMemories(index, time.Now()); err != nil {
+		stats.Errors++
 		report("memories", "", err)
 	}
 	cache := &CacheStatus{

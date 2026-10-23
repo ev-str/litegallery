@@ -49,8 +49,8 @@ type memoriesArtifact struct {
 
 type memoriesBuild struct {
 	Artifact memoriesArtifact
-	// Periods counts saturated periods over all anchors and years before
-	// deduplication.
+	// Periods counts canonical event matches over all anchors and years
+	// before deduplication.
 	Periods int
 }
 
@@ -92,6 +92,8 @@ type memorySpan struct{ start, end civilDay }
 
 // buildMemories is a pure function of the date index and now. Calendar days
 // use now's location, which matches the local wall-clock capture times.
+// Events are built once from the whole index, so their ID, dates, and media
+// never depend on now; now only selects events and sets AnchorDate.
 func buildMemories(index dateIndex, now time.Time) memoriesBuild {
 	location := now.Location()
 	byDay := make(map[civilDay][]memoryMedia)
@@ -114,87 +116,74 @@ func buildMemories(index dateIndex, now time.Time) memoriesBuild {
 		days = append(days, day)
 	}
 	sort.Slice(days, func(i, j int) bool { return days[i] < days[j] })
-	count := func(start, end civilDay) int {
+	spanDays := func(span memorySpan) []civilDay {
+		first := sort.Search(len(days), func(i int) bool { return days[i] >= span.start })
+		last := sort.Search(len(days), func(i int) bool { return days[i] > span.end })
+		return days[first:last]
+	}
+	spanCount := func(span memorySpan) int {
 		total := 0
-		for i := sort.Search(len(days), func(i int) bool { return days[i] >= start }); i < len(days) && days[i] <= end; i++ {
-			total += len(byDay[days[i]])
+		for _, day := range spanDays(span) {
+			total += len(byDay[day])
 		}
 		return total
 	}
 
+	var spans []memorySpan
+	for _, span := range canonicalSpans(days, byDay) {
+		if spanCount(span) >= memoriesMinMedia {
+			spans = append(spans, span)
+		}
+	}
+
+	// Anchors run from today back, so the first match of an event is its most
+	// recent anchor. Canonical spans are disjoint and sorted by start, so their
+	// ends are sorted too.
 	periods := 0
-	anchorAge := make(map[memorySpan]int)
+	anchorAge := make(map[int]int)
 	today := civilDayOf(now.Date())
-	for age := 0; age < memoriesAnchorDays && len(days) > 0; age++ {
+	for age := 0; age < memoriesAnchorDays && len(spans) > 0; age++ {
 		anchorYear, anchorMonth, anchorDay := (today - civilDay(age)).date().Date()
 		for year := anchorYear - 1; ; year-- {
 			center := seasonalDay(year, anchorMonth, anchorDay)
-			if center+memoriesSeasonDays < days[0] {
+			low, high := center-memoriesSeasonDays, center+memoriesSeasonDays
+			if high < spans[0].start {
 				break
 			}
-			for _, span := range saturatedPeriods(days, center-memoriesSeasonDays, center+memoriesSeasonDays, byDay) {
-				if count(span.start, span.end) < memoriesMinMedia {
-					continue
-				}
+			for i := sort.Search(len(spans), func(i int) bool { return spans[i].end >= low }); i < len(spans) && spans[i].start <= high; i++ {
 				periods++
-				if previous, ok := anchorAge[span]; !ok || age < previous {
-					anchorAge[span] = age
+				if _, matched := anchorAge[i]; !matched {
+					anchorAge[i] = age
 				}
 			}
 		}
 	}
 
-	// Sliding anchor windows clip one trip differently at their edges, so
-	// overlapping periods keep only the fullest one: most media, then earliest
-	// start, then earliest end. The winner keeps the most recent anchor.
-	spans := make([]memorySpan, 0, len(anchorAge))
-	for span := range anchorAge {
-		spans = append(spans, span)
+	selected := make([]int, 0, len(anchorAge))
+	for i := range anchorAge {
+		selected = append(selected, i)
 	}
-	sort.Slice(spans, func(i, j int) bool {
-		a, b := spans[i], spans[j]
-		if ca, cb := count(a.start, a.end), count(b.start, b.end); ca != cb {
-			return ca > cb
-		}
-		if a.start != b.start {
-			return a.start < b.start
-		}
-		return a.end < b.end
-	})
-	kept := make([]memorySpan, 0, len(spans))
-	for _, span := range spans {
-		overlapped := false
-		for _, winner := range kept {
-			if span.start <= winner.end && winner.start <= span.end {
-				anchorAge[winner] = min(anchorAge[winner], anchorAge[span])
-				overlapped = true
-				break
-			}
-		}
-		if !overlapped {
-			kept = append(kept, span)
-		}
-	}
-	sort.Slice(kept, func(i, j int) bool {
-		a, b := kept[i], kept[j]
+	sort.Slice(selected, func(i, j int) bool {
+		a, b := selected[i], selected[j]
 		if anchorAge[a] != anchorAge[b] {
 			return anchorAge[a] < anchorAge[b]
 		}
-		return a.start > b.start
+		return spans[a].start > spans[b].start
 	})
 
-	events := make([]memoryEvent, 0, len(kept))
-	for _, span := range kept {
-		media := make([]memoryMedia, 0, count(span.start, span.end))
-		for i := sort.Search(len(days), func(i int) bool { return days[i] >= span.start }); i < len(days) && days[i] <= span.end; i++ {
-			media = append(media, byDay[days[i]]...)
+	events := make([]memoryEvent, 0, len(selected))
+	for _, i := range selected {
+		span := spans[i]
+		media := make([]memoryMedia, 0, spanCount(span))
+		for _, day := range spanDays(span) {
+			media = append(media, byDay[day]...)
 		}
 		events = append(events, memoryEvent{
 			ID:         memoryEventID(span.start, span.end),
 			Year:       span.start.date().Year(),
 			StartDate:  span.start.String(),
 			EndDate:    span.end.String(),
-			AnchorDate: (today - civilDay(anchorAge[span])).String(),
+			AnchorDate: (today - civilDay(anchorAge[i])).String(),
 			MediaCount: len(media),
 			Media:      media,
 		})
@@ -212,20 +201,17 @@ func buildMemories(index dateIndex, now time.Time) memoriesBuild {
 	}
 }
 
-// saturatedPeriods groups media days inside [low, high] when at most
-// memoriesMaxGapDays empty days separate them. A longer group is narrowed to
-// its densest memoriesMaxEventDays window, the earliest one on ties.
-func saturatedPeriods(days []civilDay, low, high civilDay, byDay map[civilDay][]memoryMedia) []memorySpan {
-	first := sort.Search(len(days), func(i int) bool { return days[i] >= low })
-	last := sort.Search(len(days), func(i int) bool { return days[i] > high })
-	window := days[first:last]
+// canonicalSpans groups sorted media days when at most memoriesMaxGapDays
+// empty days separate them. A longer group is narrowed to its densest
+// memoriesMaxEventDays window, the earliest one on ties.
+func canonicalSpans(days []civilDay, byDay map[civilDay][]memoryMedia) []memorySpan {
 	var spans []memorySpan
-	for begin := 0; begin < len(window); {
+	for begin := 0; begin < len(days); {
 		end := begin
-		for end+1 < len(window) && window[end+1]-window[end] <= memoriesMaxGapDays+1 {
+		for end+1 < len(days) && days[end+1]-days[end] <= memoriesMaxGapDays+1 {
 			end++
 		}
-		group := window[begin : end+1]
+		group := days[begin : end+1]
 		begin = end + 1
 		if group[len(group)-1]-group[0] < memoriesMaxEventDays {
 			spans = append(spans, memorySpan{group[0], group[len(group)-1]})

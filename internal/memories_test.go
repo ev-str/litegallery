@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -157,11 +158,11 @@ func TestMemoriesLongSparsePeriodRechecksMinimum(t *testing.T) {
 	build := buildMemories(memoriesTestIndex(t, days...), memoriesTestNow(t, "2026-07-14"))
 	expectMemoryRanges(t, build, "2025-07-01..2025-07-13:5")
 
-	periods := saturatedPeriods([]civilDay{0, 3, 6, 9, 12, 15}, 0, 15, map[civilDay][]memoryMedia{
+	spans := canonicalSpans([]civilDay{0, 3, 6, 9, 12, 15}, map[civilDay][]memoryMedia{
 		0: make([]memoryMedia, 1), 3: make([]memoryMedia, 1), 6: make([]memoryMedia, 1), 9: make([]memoryMedia, 1), 12: make([]memoryMedia, 1), 15: make([]memoryMedia, 1),
 	})
-	if !reflect.DeepEqual(periods, []memorySpan{{0, 12}}) {
-		t.Fatalf("periods = %v", periods)
+	if !reflect.DeepEqual(spans, []memorySpan{{0, 12}}) {
+		t.Fatalf("spans = %v", spans)
 	}
 }
 
@@ -169,14 +170,15 @@ func TestMemoriesDeduplicateRepeatedDailyMatches(t *testing.T) {
 	index := memoriesTestIndex(t, memoriesTestDay{date: "2025-07-01", count: 3}, memoriesTestDay{date: "2025-07-02", count: 3})
 	build := buildMemories(index, memoriesTestNow(t, "2026-07-10"))
 	expectMemoryRanges(t, build, "2025-07-01..2025-07-02:6")
-	// Both days sit inside the windows of anchors 2026-06-18..2026-07-10.
-	if build.Periods != 23 {
+	// The windows of anchors 2026-06-17..2026-07-10 intersect the trip.
+	if build.Periods != 24 {
 		t.Fatalf("periods = %d", build.Periods)
 	}
 }
 
-func TestMemoriesOverlappingClippedPeriodsKeepFullest(t *testing.T) {
-	// Sliding windows clip the trip at 2025-06-26..; only the full trip stays.
+func TestMemoriesWindowEdgeKeepsWholeTrip(t *testing.T) {
+	// The newest window starts at 2025-06-26 inside the trip; the whole trip
+	// keeps the newest anchor.
 	var days []memoriesTestDay
 	for day := 20; day <= 30; day++ {
 		days = append(days, memoriesTestDay{date: fmt.Sprintf("2025-06-%02d", day), count: 1})
@@ -186,6 +188,116 @@ func TestMemoriesOverlappingClippedPeriodsKeepFullest(t *testing.T) {
 	if build.Artifact.Events[0].AnchorDate != "2026-07-10" || build.Periods <= 1 {
 		t.Fatalf("event = %+v periods = %d", build.Artifact.Events[0], build.Periods)
 	}
+}
+
+func memoriesTestDays(t *testing.T, start string, days, count int) []memoriesTestDay {
+	t.Helper()
+	first, err := time.Parse(memoriesDateLayout, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make([]memoriesTestDay, 0, days)
+	for i := range days {
+		result = append(result, memoriesTestDay{date: first.AddDate(0, 0, i).Format(memoriesDateLayout), count: count})
+	}
+	return result
+}
+
+// stableMemoryEvent drops the fields that may follow now.
+func stableMemoryEvent(event memoryEvent) memoryEvent {
+	event.AnchorDate = ""
+	return event
+}
+
+func TestMemoriesTripAtRightWindowEdgeIsWhole(t *testing.T) {
+	// The 2025-11-02..2025-11-12 trip enters the newest window from its right
+	// edge on 2026-10-19 and is returned whole from that day on. After
+	// 2026-11-26 its newest window falls behind today, so only the anchor moves.
+	index := memoriesTestIndex(t, memoriesTestDays(t, "2025-11-02", 11, 3)...)
+	var first memoryEvent
+	for date, anchor := range map[string]string{
+		"2026-10-19": "2026-10-19", "2026-10-20": "2026-10-20", "2026-10-23": "2026-10-23", "2026-10-24": "2026-10-24",
+		"2026-10-29": "2026-10-29", "2026-11-26": "2026-11-26", "2026-12-10": "2026-11-26",
+	} {
+		build := buildMemories(index, memoriesTestNow(t, date))
+		expectMemoryRanges(t, build, "2025-11-02..2025-11-12:33")
+		event := build.Artifact.Events[0]
+		if event.ID != "2025-11-02_2025-11-12" || event.AnchorDate != anchor {
+			t.Fatalf("%s: event = %s anchor %s", date, event.ID, event.AnchorDate)
+		}
+		if first.ID == "" {
+			first = event
+		} else if !reflect.DeepEqual(stableMemoryEvent(event), stableMemoryEvent(first)) {
+			t.Fatalf("%s: event changed:\n%+v\n%+v", date, event, first)
+		}
+	}
+	expectMemoryRanges(t, buildMemories(index, memoriesTestNow(t, "2026-10-18")))
+}
+
+func TestMemoriesEventsAreStableAcrossDays(t *testing.T) {
+	index := memoriesTestIndex(t, append(append(
+		memoriesTestDays(t, "2025-10-05", 4, 2),
+		memoriesTestDays(t, "2025-11-02", 11, 3)...),
+		memoriesTestDays(t, "2024-10-28", 3, 2)...)...)
+	seen := map[string]memoryEvent{}
+	for day := 0; day < 60; day++ {
+		now := memoriesTestNow(t, "2026-10-01").AddDate(0, 0, day)
+		for _, event := range buildMemories(index, now).Artifact.Events {
+			if previous, ok := seen[event.ID]; ok && !reflect.DeepEqual(stableMemoryEvent(previous), stableMemoryEvent(event)) {
+				t.Fatalf("%s: event %s changed:\n%+v\n%+v", now.Format(memoriesDateLayout), event.ID, previous, event)
+			}
+			seen[event.ID] = event
+		}
+	}
+	var ids []string
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if want := []string{"2024-10-28_2024-10-30", "2025-10-05_2025-10-08", "2025-11-02_2025-11-12"}; !reflect.DeepEqual(ids, want) {
+		t.Fatalf("ids = %v", ids)
+	}
+}
+
+func TestMemoriesSelectEventsIntersectingWindow(t *testing.T) {
+	// Anchors 2026-06-11..2026-07-10 cover 2025-05-28 through 2025-07-24.
+	now := memoriesTestNow(t, "2026-07-10")
+	intersecting := memoriesTestIndex(t, append(memoriesTestDays(t, "2025-05-20", 9, 1), memoriesTestDays(t, "2025-07-24", 5, 1)...)...)
+	build := buildMemories(intersecting, now)
+	expectMemoryRanges(t, build, "2025-07-24..2025-07-28:5", "2025-05-20..2025-05-28:9")
+	if got := []string{build.Artifact.Events[0].AnchorDate, build.Artifact.Events[1].AnchorDate}; !reflect.DeepEqual(got, []string{"2026-07-10", "2026-06-11"}) {
+		t.Fatalf("anchors = %v", got)
+	}
+
+	outside := memoriesTestIndex(t, append(memoriesTestDays(t, "2025-05-20", 8, 1), memoriesTestDays(t, "2025-07-25", 5, 1)...)...)
+	expectMemoryRanges(t, buildMemories(outside, now))
+}
+
+func TestMemoriesLongComponentKeepsStableDensestWindow(t *testing.T) {
+	// The densest 14-day windows hold 20..22 June; the earliest is 9..22 June.
+	var days []memoriesTestDay
+	for _, day := range memoriesTestDays(t, "2025-06-01", 30, 1) {
+		if day.date >= "2025-06-20" && day.date <= "2025-06-22" {
+			day.count = 5
+		}
+		days = append(days, day)
+	}
+	index := memoriesTestIndex(t, days...)
+	matched := 0
+	for day := 0; day < 70; day++ {
+		now := memoriesTestNow(t, "2026-05-20").AddDate(0, 0, day)
+		build := buildMemories(index, now)
+		if len(build.Artifact.Events) == 0 {
+			continue
+		}
+		matched++
+		expectMemoryRanges(t, build, "2025-06-09..2025-06-22:26")
+	}
+	if matched == 0 {
+		t.Fatal("component was never selected")
+	}
+	// Other days of the component never form their own event.
+	expectMemoryRanges(t, buildMemories(index, memoriesTestNow(t, "2026-05-24")))
 }
 
 func TestMemoriesDeterministicIDsAndOrder(t *testing.T) {
@@ -244,11 +356,11 @@ func TestMemoriesLeapDay(t *testing.T) {
 	// 29 February maps to 28 February in 2027, so the window ends 14 March.
 	index := memoriesTestIndex(t,
 		memoriesTestDay{date: "2027-03-14", count: 5},
-		memoriesTestDay{date: "2027-03-15", count: 5},
 		memoriesTestDay{date: "2024-02-29", count: 5},
 	)
 	build := buildMemories(index, memoriesTestNow(t, "2028-02-29"))
 	expectMemoryRanges(t, build, "2027-03-14..2027-03-14:5", "2024-02-29..2024-02-29:5")
+	expectMemoryRanges(t, buildMemories(memoriesTestIndex(t, memoriesTestDay{date: "2027-03-15", count: 5}), memoriesTestNow(t, "2028-02-29")))
 
 	// A leap-day trip is remembered in a non-leap year.
 	expectMemoryRanges(t, buildMemories(memoriesTestIndex(t, memoriesTestDay{date: "2024-02-29", count: 5}), memoriesTestNow(t, "2025-02-28")),
