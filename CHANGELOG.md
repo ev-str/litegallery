@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-24
+
 ### Added
 
 - Application sections in the header: Галерея, Найти, Воспоминания, Коллаж,
