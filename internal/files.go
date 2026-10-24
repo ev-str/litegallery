@@ -24,8 +24,9 @@ type Config struct {
 }
 
 type Server struct {
-	cfg Config
-	web fs.FS
+	cfg    Config
+	web    fs.FS
+	search searchIndexCache
 }
 
 type Entry struct {
@@ -94,6 +95,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/memories", s.handleMemories)
+	mux.HandleFunc("/api/search", s.handleSearch)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))

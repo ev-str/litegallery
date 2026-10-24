@@ -93,7 +93,6 @@ test('the main surface shows the first events and Все воспоминани�
   assert.equal(recent.events.length, 6);
   assert.deepEqual(recent.events, model.events.slice(0, 6));
   assert.equal(recent.hasMore, true);
-  assert.equal(recent.entryVisible, true);
   const all = memoriesView(model, 'all');
   assert.deepEqual(all.events, model.events);
 });
@@ -104,9 +103,9 @@ test('without extra events the full list is not offered', () => {
   assert.deepEqual(memoriesView(model, 'all').events, model.events);
 });
 
-test('empty and unavailable memories hide the entry', () => {
-  assert.deepEqual(memoriesView(readMemoriesResponse(ready([])), 'recent'), {events: [], hasMore: false, entryVisible: false});
-  assert.equal(memoriesView({state: 'unavailable'}, 'recent').entryVisible, false);
+test('empty and unavailable memories show no events', () => {
+  assert.deepEqual(memoriesView(readMemoriesResponse(ready([])), 'recent'), {events: [], hasMore: false});
+  assert.deepEqual(memoriesView({state: 'unavailable'}, 'recent'), {events: [], hasMore: false});
 });
 
 test('viewer items follow backend media order and carry the artifact version', () => {

@@ -113,6 +113,32 @@ export async function mockListings(page, answer) {
   return library;
 }
 
+/**
+ * Synthetic `/api/search` over `library`, matched as the server does: the
+ * relative path contains the query, ignoring case. Every query is recorded;
+ * `status` changes later answers, and while `hold` is set answers wait in
+ * `held` until released. More than `limit` matches are truncated.
+ */
+export async function mockSearch(page, library, {limit = Infinity} = {}) {
+  /** @type {{queries: string[], held: {query: string, release: () => Promise<void>}[], hold: boolean, status: number}} */
+  const search = {queries: [], held: [], hold: false, status: 200};
+  await page.route(url => url.pathname === '/api/search', route => {
+    const query = new URL(route.request().url()).searchParams.get('q') ?? '';
+    search.queries.push(query);
+    const {status} = search;
+    const matches = library.filter(item => item.path.toLowerCase().includes(query.toLowerCase()));
+    const fulfill = () => route.fulfill(status === 200
+      ? {json: {query, entries: matches.slice(0, limit), truncated: matches.length > limit}}
+      : {status, contentType: 'text/plain', body: 'not available'}).catch(() => {});
+    if (search.hold) {
+      search.held.push({query, release: fulfill});
+      return undefined;
+    }
+    return fulfill();
+  });
+  return search;
+}
+
 /** Media routes answer one PNG; `/api/image-info` answers a fixed size. */
 export async function stubMedia(page, paths = ['/api/thumb', '/api/video-poster', '/api/cover', '/api/media', '/api/image-info']) {
   await page.route(url => paths.includes(url.pathname), route => {

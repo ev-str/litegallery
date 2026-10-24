@@ -73,6 +73,28 @@
       <div id="status" role="status">Загрузка…</div>
       <button id="recursiveToggle" class="scope-toggle" type="button" aria-pressed="false" title="Показать файлы из всех вложенных папок" hidden>Из подпапок</button>
     </div>
+    <div id="mediaTools" class="section-tools media-tools" hidden>
+      <div id="mediaFilter" class="filter-segments" aria-label="Тип файлов">
+        <button type="button" data-filter="all">Все</button>
+        <button type="button" data-filter="image">Фото</button>
+        <button type="button" data-filter="video">Видео</button>
+      </div>
+      <select id="mediaSort" class="sort-select" aria-label="Сортировка файлов">
+        <option value="date">По дате</option>
+        <option value="name">По имени</option>
+      </select>
+      <button id="mediaDirection" class="sort-button direction-button" type="button" aria-label="Изменить направление сортировки"></button>
+      <label class="group-select" title="Группировка по дате">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-calendar"></use></svg>
+        <span class="group-select-label">Группы</span>
+        <select id="mediaGroup" class="sort-select" aria-label="Группировка по дате">
+          <option value="none">Нет</option>
+          <option value="year">Год</option>
+          <option value="month">Месяц</option>
+          <option value="day">День</option>
+        </select>
+      </label>
+    </div>
     <div id="emptyState" class="gallery-empty" hidden>
       <strong>Здесь пока пусто</strong>
       <span>В этой папке нет фотографий, видео и вложенных папок</span>
@@ -92,28 +114,6 @@
         <div class="media-title-row">
           <h1>Фотографии и видео</h1>
           <span id="mediaCount"></span>
-        </div>
-        <div class="section-tools media-tools">
-          <div id="mediaFilter" class="filter-segments" aria-label="Тип файлов">
-            <button type="button" data-filter="all">Все</button>
-            <button type="button" data-filter="image">Фото</button>
-            <button type="button" data-filter="video">Видео</button>
-          </div>
-          <select id="mediaSort" class="sort-select" aria-label="Сортировка файлов">
-            <option value="date">По дате</option>
-            <option value="name">По имени</option>
-          </select>
-          <button id="mediaDirection" class="sort-button direction-button" type="button" aria-label="Изменить направление сортировки"></button>
-          <label class="group-select" title="Группировка по дате">
-            <svg class="icon" aria-hidden="true" focusable="false"><use href="#icon-calendar"></use></svg>
-            <span class="group-select-label">Группы</span>
-            <select id="mediaGroup" class="sort-select" aria-label="Группировка по дате">
-              <option value="none">Нет</option>
-              <option value="year">Год</option>
-              <option value="month">Месяц</option>
-              <option value="day">День</option>
-            </select>
-          </label>
         </div>
       </div>
       <div id="mediaGroupHeading" class="media-group-sticky" aria-hidden="true" hidden></div>

@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {formatBytes, formatFileDetails} from '../../web/format.js';
-import {clickHeaderControl, directory, focusWithKeyboard, isDesktopBrowserProject, ONE_PIXEL_PNG, openAlbum, stubMedia} from './helpers.mjs';
+import {clickHeaderControl, directory, focusWithKeyboard, isDesktopBrowserProject, listing as listingAnswer, mockListings, ONE_PIXEL_PNG, openAlbum, stubMedia} from './helpers.mjs';
 
 const DESKTOP_DENSITY = [3, 5, 7];
 const PHONE_DENSITY = [1, 2, 3];
@@ -403,4 +403,74 @@ test('Backspace on a focused select keeps the nested folder', async ({page}) => 
   await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
   await expect(page.locator('#mediaSort')).toBeFocused();
   expect(listings).toEqual([]);
+});
+
+test('filter, sort, and grouping sit above the folders and media in every scope', {tag: '@essential'}, async ({page}, testInfo) => {
+  const mediaFile = (path, hour, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 2048, modTime: '2026-01-15T12:00:00Z', sortTime: 1_760_000_000 + hour * 3600});
+  const files = [mediaFile('Trip/b.jpg', 1), mediaFile('Trip/a.mp4', 2, 'video'), mediaFile('Trip/Day 1/c.jpg', 3), mediaFile('Trip/Day 2/d.jpg', 4)];
+  const listings = {
+    '': [directory('Archive'), directory('Misc'), directory('Trip'), directory('Zoo')],
+    Trip: [directory('Trip/Day 1'), directory('Trip/Day 2'), ...files.slice(0, 2)],
+    'Trip?recursive': files,
+  };
+  await mockListings(page, (key, path) => (key === 'Broken' ? {status: 500, body: 'boom'} : listingAnswer(path, listings[key] ?? [])));
+  await stubMedia(page);
+  const tools = page.locator('#mediaTools');
+  const box = async locator => /** @type {{x: number, y: number, width: number, height: number}} */ (await locator.boundingBox());
+  const expectAbove = async locator => {
+    const [panel, below] = [await box(tools), await box(locator)];
+    expect(panel.y + panel.height).toBeLessThanOrEqual(below.y);
+  };
+  const expectNoOverflow = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+
+  // The root has folders only, yet the controls are there, above the first folder.
+  await page.goto('/');
+  await expect(page.locator('#folders .folder-card')).toHaveCount(4);
+  await expect(tools).toBeVisible();
+  await expect(page.locator('#mediaSection')).toBeHidden();
+  await expectAbove(page.locator('#folders .folder-card').first());
+  const status = await box(page.locator('.gallery-toolbar'));
+  expect(status.y + status.height).toBeLessThanOrEqual((await box(tools)).y);
+  await expectNoOverflow();
+  await tools.evaluate(element => { element.dataset.marker = 'same node'; });
+
+  await page.getByRole('button', {name: 'Открыть папку Trip'}).click();
+  await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
+  await expectAbove(page.locator('#folders .folder-card').first());
+  await expectAbove(page.locator('#mediaSection h1'));
+  const top = (await box(tools)).y;
+
+  // Switching the scope hides the folders; the same controls stay at the same place.
+  await page.locator('#recursiveToggle').click();
+  await expect(page.locator('#mediaGrid .media-card')).toHaveCount(files.length);
+  await expect(page.locator('#foldersSection')).toBeHidden();
+  await expect(tools).toHaveAttribute('data-marker', 'same node');
+  expect((await box(tools)).y).toBe(top);
+  await expectAbove(page.locator('#mediaGrid .media-card').first());
+  await page.locator('#recursiveToggle').click();
+  await expect(page.locator('#foldersSection')).toBeVisible();
+  await expect(tools).toHaveAttribute('data-marker', 'same node');
+  expect((await box(tools)).y).toBe(top);
+  await expect(page.locator('#gallerySurface #mediaTools')).toHaveCount(1);
+
+  // The controls still drive the grid.
+  await page.locator('#mediaFilter [data-filter="video"]').click();
+  await expect(page.locator('#mediaGrid .media-card')).toHaveCount(1);
+  await page.locator('#mediaFilter [data-filter="all"]').click();
+  await page.locator('#mediaSort').selectOption('name');
+  await page.locator('#mediaDirection').click();
+  await expect(page.locator('#mediaGrid .media-card')).toHaveCount(2);
+  expect(await page.locator('#mediaGrid .media-card').evaluateAll(cards => cards.map(card => card.dataset.path))).toEqual(['Trip/a.mp4', 'Trip/b.jpg']);
+  await page.locator('#mediaGroup').selectOption('day');
+  await expect(page.locator('#mediaGrid .media-group-heading')).toHaveCount(1);
+  await expectNoOverflow();
+  if (isDesktopBrowserProject(testInfo)) {
+    await page.setViewportSize({width: 1920, height: 1080});
+    await expectNoOverflow();
+  }
+
+  // A failed load hides them.
+  await page.goto('/?path=Broken');
+  await expect(page.locator('#status')).toHaveText('Каталог недоступен');
+  await expect(tools).toBeHidden();
 });

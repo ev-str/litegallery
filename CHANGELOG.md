@@ -19,11 +19,16 @@
 - Folders with thousands of files render only the tiles near the screen.
 - The open folder is checked in the background every 45 seconds; changes
   appear in place and keep the scroll position and focus.
-- `Найти` searches file names in the shown listing, and relative paths in
-  `Из подпапок` mode.
+- `Найти` searches file names and relative paths across the whole library,
+  independent of the open folder, through `/api/search`. It reads the date
+  index of the cache warmer and never walks the library; until the first
+  successful warm scan it answers HTTP 503 and the section says that search is
+  still being prepared. Results show their folder, follow the gallery's
+  filter, sorting, and grouping, and are what the viewer and TV play.
 - Date grouping by year, month, or day.
 - `Воспоминания` shows events from the same days in earlier years, built by the
-  cache warmer from a date index.
+  cache warmer from a date index. The section is always in the header; before
+  the first build it shows that the selection is still being prepared.
 - Read-only `Состояние галереи`: the cache warmer run, cache totals, recent
   errors, and the memories build, served by `/api/status`.
 - On phones the density switch, TV mode, refresh, and gallery status sit in a
@@ -31,6 +36,9 @@
 
 ### Changed
 
+- The filter, sorting, direction, and grouping controls sit at the top of the
+  gallery, above the folders, and keep their place when `Из подпапок` is
+  switched.
 - A recursive listing stops at 100,000 media files; a larger subtree answers
   HTTP 413 and the gallery shows a clear message instead of a generic error.
 - The grids no longer announce every tile to screen readers; the status line

@@ -1,7 +1,7 @@
 import {createSurfaces, routeSurfaceEntries} from './app-surfaces.js';
 import {createCollageLanding} from './collage-landing.js';
 import {createCollageSelection} from './collage-selection.js';
-import {groupMedia, groupRuns} from './date-groups.js';
+import {groupMedia} from './date-groups.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
 import {createGalleryStatus} from './gallery-status.js';
 import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
@@ -27,6 +27,7 @@ const mediaSort = document.querySelector('#mediaSort');
 const mediaDirection = document.querySelector('#mediaDirection');
 const mediaFilter = document.querySelector('#mediaFilter');
 const mediaGroup = document.querySelector('#mediaGroup');
+const mediaTools = document.querySelector('#mediaTools');
 const emptyState = document.querySelector('#emptyState');
 const refreshButton = document.querySelector('#refresh');
 const tvButton = document.querySelector('#tvMode');
@@ -230,11 +231,10 @@ const search = createSearch({
   empty: document.querySelector('#searchEmpty'),
   grid: document.querySelector('#searchGrid'),
   heading: document.querySelector('#searchGroupHeading'),
-  // null while a listing loads; a failed load leaves nothing to search.
-  getItems: () => (state.shownPath !== null ? media : loadController ? null : []),
-  getScope: () => ({folder: state.shownPath ?? state.requestedPath, recursive: state.recursive, filter: state.filter}),
+  getFilter: () => state.filter,
+  // Results get the gallery's filter, sort, and grouping, so viewer and TV play them in that order.
+  arrange: arrangeMedia,
   createCard: (item, index, work) => createMediaCard(item, index, work, 'search'),
-  getGroups: results => groupRuns(results, state.groupBy),
   viewportTop: () => header.getBoundingClientRect().bottom,
   onChange: () => {
     thumbnails.wake();
@@ -277,12 +277,15 @@ function updateMediaControls() {
   mediaDirection.setAttribute('aria-label', `Изменить направление сортировки. Сейчас: ${mediaDirection.title}`);
 }
 
+// Grouping reorders whole groups only; viewer and TV get this visual order.
+function arrangeMedia(items) {
+  const filtered = items.filter(item => state.filter === 'all' || item.kind === state.filter);
+  return groupMedia(sortMedia(filtered), state.groupBy, state.descending);
+}
+
 function applyMediaView() {
-  const filtered = allMedia.filter(item => state.filter === 'all' || item.kind === state.filter);
-  // Grouping reorders whole groups only; viewer, TV, and Найти get this visual order.
-  ({items: media, groups: mediaGroups} = groupMedia(sortMedia(filtered), state.groupBy, state.descending));
+  ({items: media, groups: mediaGroups} = arrangeMedia(allMedia));
   renderMedia(media);
-  search.refresh();
   syncTvButton();
 }
 
@@ -316,6 +319,7 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
   delete mediaSection.dataset.loading;
   foldersSection.hidden = true;
   mediaSection.hidden = true;
+  mediaTools.hidden = true;
   emptyState.hidden = true;
   tvButton.disabled = true;
   refreshButton.classList.add('is-busy');
@@ -339,6 +343,7 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
     clearTimeout(skeletonTimer);
     delete mediaSection.dataset.loading;
     showListing(data.entries);
+    mediaTools.hidden = false;
     shownListing = JSON.stringify(data.entries);
     state.shownPath = state.path;
     restoreView(state.path);
@@ -498,8 +503,8 @@ function createMediaCard(item, index, work, source = 'gallery') {
   card.type = 'button';
   card.className = `media-card gallery-item ${item.kind}`;
   card.dataset.path = item.path;
-  // Recursive search results always name their subfolder.
-  const context = source === 'search' && state.recursive ? {relative: relativePath(item, state.path), folder: relativeFolder(item, state.path) || 'Эта папка'} : subfolders.get(item.path);
+  // Search results come from the whole gallery and always name their folder.
+  const context = source === 'search' ? {relative: item.path, folder: relativeFolder(item, '') || 'Все фото'} : subfolders.get(item.path);
   card.title = context?.relative ?? item.name;
   if (!selection.decorateCard(card, item)) card.setAttribute('aria-label', `Открыть ${context?.relative ?? item.name}`);
   const version = `${item.modTime}-${item.size}`;
@@ -666,11 +671,12 @@ function returnFromViewer() {
   }
   const opened = state.lastOpened;
   if (!opened) return;
-  const sameFolder = opened.folder === state.shownPath;
   const fromSearch = opened.source === 'search' && surfaces.current === 'search';
+  // Search results do not belong to a folder; gallery tiles only to the one shown.
+  const sameList = fromSearch || opened.folder === state.shownPath;
   const list = fromSearch ? search.results : media;
-  const tile = sameFolder ? (fromSearch ? search.tileFor(opened.path) : tileFor(opened.path)) : null;
-  const neighbour = sameFolder && list.length ? (fromSearch ? search : mediaWindow).revealIndex(Math.min(opened.index, list.length - 1)) : null;
+  const tile = sameList ? (fromSearch ? search.tileFor(opened.path) : tileFor(opened.path)) : null;
+  const neighbour = sameList && list.length ? (fromSearch ? search : mediaWindow).revealIndex(Math.min(opened.index, list.length - 1)) : null;
   const target = tile || neighbour || (fromSearch ? searchInput : galleryItems()[0] || headerFocusTarget());
   target.focus({preventScroll: true});
   // Pointer users get no :focus-visible after a programmatic focus; show the ring anyway.
@@ -701,36 +707,39 @@ function focusInDirection(key) {
   return Boolean(best);
 }
 
-// Sorting and filtering keep their section heading in place; density keeps the top tile.
+// Sorting and filtering keep the control that was used in place; density keeps the top tile.
 const foldersHeading = foldersSection.querySelector('.section-heading');
-const mediaHeading = mediaSection.querySelector('.section-heading');
 
 folderSort.addEventListener('click', () => keepInPlace(foldersHeading, () => {
   state.toggleFolderOrder();
   renderFolders(sortByName(directories, state.folderDescending));
 }));
 
-mediaSort.addEventListener('change', () => keepInPlace(mediaHeading, () => {
+mediaSort.addEventListener('change', () => keepInPlace(mediaTools, () => {
   state.setSortKey(mediaSort.value);
   applyMediaView();
+  search.refresh();
 }));
 
-mediaGroup.addEventListener('change', () => keepInPlace(mediaHeading, () => {
+mediaGroup.addEventListener('change', () => keepInPlace(mediaTools, () => {
   state.setGroupBy(mediaGroup.value);
   applyMediaView();
+  search.refresh();
 }));
 
-mediaDirection.addEventListener('click', () => keepInPlace(mediaHeading, () => {
+mediaDirection.addEventListener('click', () => keepInPlace(mediaTools, () => {
   state.toggleDescending();
   applyMediaView();
+  search.refresh();
 }));
 
 mediaFilter.addEventListener('click', event => {
   const button = event.target.closest('[data-filter]');
   if (!button) return;
-  keepInPlace(mediaHeading, () => {
+  keepInPlace(mediaTools, () => {
     state.setFilter(button.dataset.filter);
     applyMediaView();
+    search.refresh();
   });
 });
 
@@ -820,7 +829,7 @@ function restoreGallery() {
 }
 
 surfaces.register('gallery', {panel: main, entry: galleryEntry, leave: leaveGallery, enter: enterGallery});
-// Найти searches the list on screen: no request, and the gallery keeps its grid, scroll, and focus.
+// Найти searches the whole gallery through the server; the gallery keeps its grid, scroll, and focus.
 surfaces.register('search', {
   panel: document.querySelector('#searchSurface'),
   entry: document.querySelector('#searchMode'),
@@ -837,11 +846,10 @@ surfaces.register('search', {
 });
 surfaces.register('collage', {panel: document.querySelector('#collageSurface'), entry: document.querySelector('#collageMode')});
 // Memories open their event in the same viewer; closing it returns to the event card.
-// Registering shows the entry, so the module, which hides it until events exist, comes after.
+// The entry is always shown: loading, empty, and unavailable states live in the section.
 surfaces.register('memories', {panel: document.querySelector('#memoriesSurface'), entry: document.querySelector('#memoriesMode'), enter: () => memories.enter()});
 const memories = createMemories({
   panel: document.querySelector('#memoriesSurface'),
-  entry: document.querySelector('#memoriesMode'),
   openViewer: (items, {tv, returnFocus}) => {
     if (viewer.isOpen || !items.length) return;
     viewerOpener = returnFocus;

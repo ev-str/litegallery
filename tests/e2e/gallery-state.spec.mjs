@@ -155,14 +155,21 @@ test('refresh keeps filter, sorting, direction, density, scroll, and the focused
 test('filter, sort, and density changes keep the controls and the top tile in place', async ({page}, testInfo) => {
   await mockLibrary(page);
   await page.goto('/?path=Folder%2003');
-  const heading = page.locator('#mediaSection .section-heading');
-  await page.evaluate(() => scrollTo({top: 120, behavior: 'instant'}));
-  const headingY = (await heading.boundingBox()).y;
+  // Scrolled, with the controls still just below the sticky header.
+  const controls = page.locator('#mediaTools');
+  await expect(controls).toBeVisible();
+  const scrolled = await controls.evaluate(element => {
+    const headerBottom = document.querySelector('.topbar').getBoundingClientRect().bottom;
+    scrollTo({top: Math.round(element.getBoundingClientRect().top + scrollY - headerBottom - 4), behavior: 'instant'});
+    return Math.round(scrollY);
+  });
+  expect(scrolled).toBeGreaterThan(0);
+  const controlsY = (await controls.boundingBox()).y;
   await page.locator('#mediaSort').selectOption('name');
-  expect((await heading.boundingBox()).y).toBe(headingY);
+  expect((await controls.boundingBox()).y).toBe(controlsY);
   await page.locator('#mediaDirection').click();
-  expect((await heading.boundingBox()).y).toBe(headingY);
-  expect(await scrollTop(page)).toBe(120);
+  expect((await controls.boundingBox()).y).toBe(controlsY);
+  expect(await scrollTop(page)).toBe(scrolled);
 
   // Stay clear of the document's lower scroll limit in both density modes.
   const anchorIndex = testInfo.project.use.viewport.width <= 700 ? 12 : 10;

@@ -349,10 +349,13 @@ main {
   gap: 16px;
 }
 
+/* Filter, sort, and grouping sit above the folders and media, in every scope. */
 .media-tools {
   width: 100%;
+  margin-top: 12px;
   justify-content: flex-end;
 }
+.media-tools[hidden] { display: none; }
 
 .filter-segments, .density-segments {
   display: inline-flex;
@@ -971,7 +974,6 @@ main {
   [data-grid-columns="2"] .folder-name, [data-grid-columns="3"] .folder-name { font-size: .9rem; }
   [data-grid-columns="3"] .folder-meta { font-size: .66rem; }
   .collection-section + .collection-section { margin-top: 30px; }
-  .media-heading { gap: 10px; }
   /* Filter on its own row; sort, direction, and grouping share the second. */
   .media-tools { flex-wrap: wrap; gap: 7px; }
   .filter-segments { flex: 1 0 100%; min-width: 0; margin-left: 0; }

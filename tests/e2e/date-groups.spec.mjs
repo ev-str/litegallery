@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test';
 import {GROUP_STORAGE_KEY} from '../../web/date-groups.js';
 import {WINDOW_MIN_ITEMS} from '../../web/media-window.js';
-import {clickHeaderControl, directory, listing, mockListings, scrollTop, stubMedia} from './helpers.mjs';
+import {clickHeaderControl, directory, listing, mockListings, mockSearch, scrollTop, stubMedia} from './helpers.mjs';
 
 // The browser runs in Europe/Moscow (UTC+3, no DST): a Moscow wall-clock time as Unix seconds.
 const moscow = (year, month, day, hour = 12) => Date.UTC(year, month - 1, day, hour - 3) / 1000;
@@ -34,6 +34,7 @@ const LISTINGS = {
 
 async function mockLibrary(page) {
   await mockListings(page, (key, path) => listing(path, LISTINGS[key] ?? []));
+  await mockSearch(page, TRIP_FILES);
   await stubMedia(page);
 }
 

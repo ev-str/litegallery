@@ -26,7 +26,13 @@ photo library already has a useful folder structure and must remain untouched.
 - Photo and video viewer with fit-to-screen and fullscreen modes.
 - Keyboard, remote-control focus, swipe, and previous/next navigation.
 - Filters for all media, photos only, or videos only.
-- Sorting by filename or capture date, in either direction.
+- Sorting by filename or capture date, in either direction, and grouping by
+  year, month, or day. These controls sit at the top of the gallery, above
+  the folders.
+- **Найти** searches file and folder names across the whole library, wherever
+  the gallery is open. Results show their folder and follow the gallery's
+  filter, sorting, and grouping.
+- **Воспоминания** shows photos and videos from the same days in earlier years.
 - On-demand EXIF details: capture time, camera, lens, exposure, dimensions,
   and GPS when present.
 - Pure-Go capture-time parsing for MP4-family video containers.
@@ -211,6 +217,12 @@ An hourly scheduler works well for a NAS that is not always powered on.
 `-min-interval 24h` makes recent successful scans exit quickly. A lock prevents
 overlapping warmers. Pruning runs only after a complete, non-empty scan and
 removes stale LiteGallery cache entries only after the configured grace period.
+
+Each successful scan also writes a date index of the whole library to the
+cache. **Найти** (`/api/search`) and **Воспоминания** read only this index, so
+a search never walks the library. Until the first successful scan after an
+install or a cache reset, both sections stay in the header and say that they
+are still being prepared; the folder gallery works as usual meanwhile.
 
 ## XigmaNAS and FreeBSD
 

@@ -113,12 +113,11 @@ export function readMemoriesResponse(response) {
  * @param {'recent'|'all'} mode
  */
 export function memoriesView(model, mode) {
-  if (model.state !== 'ready') return {events: [], hasMore: false, entryVisible: false};
+  if (model.state !== 'ready') return {events: [], hasMore: false};
   const hasMore = model.events.length > model.shown;
   return {
     events: mode === 'all' && hasMore ? model.events : model.events.slice(0, model.shown),
     hasMore,
-    entryVisible: model.events.length > 0,
   };
 }
 
@@ -149,12 +148,11 @@ export function memoryViewerItems(event, version) {
 /**
  * @param {{
  *   panel: HTMLElement,
- *   entry: HTMLElement,
  *   openViewer: OpenViewer,
  *   load?: () => Promise<any>,
  * }} options
  */
-export function createMemories({panel, entry, openViewer, load = defaultLoad}) {
+export function createMemories({panel, openViewer, load = defaultLoad}) {
   panel.classList.add('memories-surface');
   panel.removeAttribute('aria-label');
   panel.setAttribute('aria-labelledby', 'memoriesTitle');
@@ -200,8 +198,7 @@ export function createMemories({panel, entry, openViewer, load = defaultLoad}) {
   const control = (id, action) => /** @type {HTMLElement | null} */ (list.querySelector(`[data-memory-id="${CSS.escape(id)}"] [data-memory-action="${action}"]`));
 
   function render() {
-    const view = model ? memoriesView(model, mode) : {events: [], hasMore: false, entryVisible: false};
-    entry.hidden = !view.entryVisible;
+    const view = model ? memoriesView(model, mode) : {events: [], hasMore: false};
     if (!view.hasMore) mode = 'recent';
     panel.dataset.state = state;
     panel.dataset.mode = mode;

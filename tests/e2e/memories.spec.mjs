@@ -133,13 +133,13 @@ test('slideshow and TV mode play an event', async ({page}) => {
   await expect(tvButton).toBeFocused();
 });
 
-for (const [name, body, status] of [
-  ['an empty artifact', ready([]), 200],
-  ['an unavailable artifact', UNAVAILABLE, 200],
-  ['a failing endpoint', {error: 'boom'}, 500],
-  ['a malformed answer', {state: 'ready', events: 'oops'}, 200],
+for (const [name, body, status, state, text] of [
+  ['an empty artifact', ready([]), 200, 'empty', 'Сейчас воспоминаний нет'],
+  ['an unavailable artifact', UNAVAILABLE, 200, 'unavailable', 'Подборка ещё готовится'],
+  ['a failing endpoint', {error: 'boom'}, 500, 'error', 'Не удалось загрузить воспоминания'],
+  ['a malformed answer', {state: 'ready', events: 'oops'}, 200, 'unavailable', 'Подборка ещё готовится'],
 ]) {
-  test(`${name} hides the entry and leaves the gallery working`, async ({page}) => {
+  test(`${name} keeps the entry, shows its state in the section, and leaves the gallery working`, async ({page}) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await mockMemories(page, body, status);
@@ -147,11 +147,22 @@ for (const [name, body, status] of [
     await page.goto('/');
     await answered;
     await expect(page.getByRole('button', {name: 'Открыть папку Album A'})).toBeVisible();
-    await expect(entry(page)).toBeHidden();
     await expect(page.locator('#collageMode')).toBeVisible();
+    await entry(page).click();
+    await expect(surface(page)).toHaveAttribute('data-state', state);
+    await expect(surface(page).getByText(text)).toBeVisible();
+    await expect(cards(page)).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }
+
+test('the entry is shown while memories are still loading', async ({page}) => {
+  await page.route('**/api/memories*', () => {});
+  await page.goto('/');
+  await entry(page).click();
+  await expect(surface(page)).toHaveAttribute('data-state', 'loading');
+  await expect(surface(page).locator('.memories-note')).toHaveText('Загрузка воспоминаний…');
+});
 
 test('a failed update keeps the last list; an unavailable answer shows its state', async ({page}) => {
   const answer = await mockMemories(page, ready());
@@ -174,7 +185,7 @@ test('a failed update keeps the last list; an unavailable answer shows its state
   await expect(surface(page)).toHaveAttribute('data-state', 'unavailable');
   await expect(surface(page).getByText('Воспоминания пока недоступны')).toBeVisible();
   await expect(cards(page)).toHaveCount(0);
-  await expect(entry(page)).toBeHidden();
+  await expect(entry(page)).toBeVisible();
 
   answer(ready([]));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
