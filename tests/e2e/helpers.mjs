@@ -40,6 +40,7 @@ export async function startCollage(page, count = 2) {
   await start.evaluate(element => element.focus({preventScroll: true}));
   await start.press('Enter');
   await expect(editor(page)).toBeVisible();
+  await expect(editor(page)).toHaveAttribute('data-ready', 'true');
   await expect(editor(page).locator('[data-cell-index]')).toHaveCount(count);
   await expect(editor(page).locator('[data-quality-summary]')).toContainText('300 PPI');
 }
