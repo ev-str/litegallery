@@ -56,6 +56,18 @@ Browser-test rules:
   test counts.
 - Re-run only the failed tests with `--timeout=30000 --max-failures=5` before
   deciding whether a failure is a product bug, a slow test, or a flaky test.
+- `playwright.config.mjs` scopes its output directory by process ID. When the
+  first run and `--last-failed` run are separate processes, give both the same
+  fresh `LITEGALLERY_E2E_RUNTIME` directory; otherwise the second process
+  cannot read the first run's `.last-run.json`:
+
+  ```sh
+  litegallery_e2e_runtime="$(mktemp -d /tmp/litegallery-e2e.XXXXXX)"
+  export LITEGALLERY_E2E_RUNTIME="$litegallery_e2e_runtime"
+
+  npx playwright test --timeout=15000 --max-failures=10
+  npx playwright test --last-failed --timeout=30000 --max-failures=5
+  ```
 - Never run two Playwright runs at once: both use port 18090.
 - Derive expectations from the shared modules (`web/collage/formats.js`,
   `web/collage/templates.js`) instead of hard-coding counts or aspect ratios.
