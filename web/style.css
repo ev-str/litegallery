@@ -160,12 +160,23 @@ body[data-surface="search"] #tvMode { visibility: visible; }
 .collage-landing-status { max-width: 920px; margin: 16px 0 0; color: #8b352d; font-weight: 650; }
 .collage-landing-status[hidden] { display: none; }
 
-/* Gallery status: read-only, equal top-level sections. */
-#statusSurface > * { max-width: 920px; }
-#statusSurface h1 { margin: 0 0 18px; font-size: 1.35rem; letter-spacing: -.03em; }
+/* Gallery status: read-only. Desktop: Кэш | Последние ошибки, then Воспоминания full width. */
+#statusSurface:not([hidden]) {
+  display: grid;
+  grid-template-columns: min(720px, 60% - 6px) min(480px, 40% - 8px);
+  grid-template-areas: "title title" "cache errors" "memories memories";
+  justify-content: start;
+  align-items: start;
+  gap: 14px;
+}
+#statusSurface h1 { grid-area: title; margin: 0 0 4px; font-size: 1.35rem; letter-spacing: -.03em; }
 #statusSurface h1:focus { outline: none; }
-.gallery-status-section { padding: 18px 20px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
-.gallery-status-section + .gallery-status-section { margin-top: 14px; }
+#statusSurface [data-status-section="cache"] { grid-area: cache; }
+#statusSurface [data-status-section="memories"] { grid-area: memories; }
+/* The error card takes the row height set by Кэш and never grows it. */
+#statusSurface [data-status-section="errors"] { grid-area: errors; align-self: stretch; display: flex; flex-direction: column; min-height: 260px; contain: size; }
+#statusSurface [data-status-section="errors"] > .gallery-status-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.gallery-status-section { min-width: 0; padding: 18px 20px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
 .gallery-status-section h2 { margin: 0 0 10px; font-size: 1.05rem; }
 .gallery-status-whole { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .gallery-status-whole h3 { margin: 0 0 8px; font-size: .95rem; }
@@ -173,11 +184,26 @@ body[data-surface="search"] #tvMode { visibility: visible; }
 .gallery-status-sub { display: block; margin: 4px 0 0; color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
 .gallery-status-progress-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: .88rem; font-variant-numeric: tabular-nums; }
 .gallery-status-progress { flex: 1 1 auto; max-width: 420px; height: 8px; accent-color: var(--accent); }
-.gallery-status-metrics { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
-.gallery-status-metrics li { white-space: nowrap; }
-.gallery-status-errors { margin: 0; padding: 0; list-style: none; }
-.gallery-status-errors li + li { margin-top: 10px; }
+.gallery-status-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+.gallery-status-whole .gallery-status-metrics { margin-top: 0; }
+.gallery-status-whole .gallery-status-metrics + .gallery-status-sub { margin-top: 10px; }
+.gallery-status-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px; background: #fbf4ec; border: 1px solid var(--line); border-radius: var(--control-radius); }
+.gallery-status-value { font-size: 1.3rem; font-weight: 700; line-height: 1.15; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gallery-status-label { color: var(--muted); font-size: .82rem; line-height: 1.25; overflow-wrap: break-word; }
+.gallery-status-errors { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin: 0 -8px; padding: 0 8px; list-style: none; border-radius: var(--control-radius); }
+.gallery-status-errors:focus-visible { outline: 3px solid rgba(187, 118, 84, .35); outline-offset: 2px; }
+.gallery-status-errors li + li { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .gallery-status-path { font-weight: 600; overflow-wrap: anywhere; }
+/* Phone and narrow tablet: Кэш, Последние ошибки, Воспоминания in one column. */
+@media (max-width: 1099px) {
+  #statusSurface:not([hidden]) { grid-template-columns: minmax(0, 920px); grid-template-areas: "title" "cache" "errors" "memories"; }
+  #statusSurface [data-status-section="errors"] { contain: none; min-height: 0; max-height: min(360px, 60vh); }
+}
+@media (max-width: 700px) {
+  .gallery-status-metrics { grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); gap: 6px; }
+  .gallery-status-tile { padding: 8px 10px; }
+  .gallery-status-value { font-size: 1.15rem; }
+}
 .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .topbar {

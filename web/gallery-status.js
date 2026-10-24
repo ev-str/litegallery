@@ -89,26 +89,29 @@ const MEMORY_METRICS = /** @type {const} */ ([
   ['errors', ['ошибка', 'ошибки', 'ошибок']],
 ]);
 
+/** @typedef {{value: string, label: string}} Metric one tile: `147` over `периодов` */
+
 /**
  * `147 периодов`-style metrics for the counters that are present and valid.
  * @param {any} source @param {ReadonlyArray<readonly [string, readonly string[]]>} metrics
+ * @returns {Metric[]}
  */
 function metricList(source, metrics) {
-  /** @type {string[]} */
+  /** @type {Metric[]} */
   const list = [];
   for (const [key, forms] of metrics) {
     const value = count(source?.[key]);
-    if (value !== null) list.push(formatCount(value, forms));
+    if (value !== null) list.push({value: String(value), label: formatCount(value, forms).slice(String(value).length + 1)});
   }
   return list;
 }
 
 /**
  * @typedef {object} StatusView
- * @property {{state: string, line: string, started: string, progress: null | {value: number, max: number, text: string}, metrics: string[]}} run
- * @property {null | {metrics: string[], size: string, lastFullScan: string}} cache
+ * @property {{state: string, line: string, started: string, progress: null | {value: number, max: number, text: string}, metrics: Metric[]}} run
+ * @property {null | {metrics: Metric[], lastFullScan: string}} cache
  * @property {{path: string, error: string}[]} errors
- * @property {{state: string, line: string, readyVersion: string, metrics: string[]}} memories
+ * @property {{state: string, line: string, readyVersion: string, metrics: Metric[]}} memories
  */
 
 /**
@@ -150,8 +153,8 @@ export function describeStatus(status, now = new Date()) {
       metrics: run ? metricList(run, RUN_METRICS) : [],
     },
     cache: cache && {
-      metrics: metricList(cache, CACHE_METRICS),
-      size: size === null ? '' : `Размер кэша: ${formatBytes(size) || '0 Б'}`,
+      metrics: size === null ? metricList(cache, CACHE_METRICS)
+        : [...metricList(cache, CACHE_METRICS), {value: formatBytes(size) || '0 Б', label: 'размер кэша'}],
       lastFullScan: scanned ? `Последний полный обход: ${formatMoment(scanned, now)}` : '',
     },
     errors: (ok && Array.isArray(status.recentErrors) ? status.recentErrors : [])
@@ -280,10 +283,14 @@ function element(tag, className, text) {
   return node;
 }
 
-/** @param {string[]} metrics */
+/** One tile per metric; the space keeps `147 периодов` as the accessible text. @param {Metric[]} metrics */
 function metricsNode(metrics) {
   const list = element('ul', 'gallery-status-metrics');
-  for (const metric of metrics) list.append(element('li', '', metric));
+  for (const {value, label} of metrics) {
+    const tile = element('li', 'gallery-status-tile');
+    tile.append(element('span', 'gallery-status-value', value), ' ', element('span', 'gallery-status-label', label));
+    list.append(tile);
+  }
   return list;
 }
 
@@ -340,14 +347,17 @@ export function createGalleryStatus({panel, load = fetchStatus, now = () => new 
     whole.append(element('h3', '', 'Весь кэш'));
     if (view.cache) {
       whole.append(metricsNode(view.cache.metrics));
-      for (const line of [view.cache.size, view.cache.lastFullScan]) if (line) whole.append(element('p', 'gallery-status-sub', line));
+      if (view.cache.lastFullScan) whole.append(element('p', 'gallery-status-sub', view.cache.lastFullScan));
     } else {
       whole.append(element('p', 'gallery-status-sub', UNAVAILABLE));
     }
     cache.body.replaceChildren(run, whole);
 
     if (view.errors.length) {
+      // Scrolls inside its card, so it takes focus for keyboard scrolling.
       const list = element('ul', 'gallery-status-errors');
+      list.tabIndex = 0;
+      list.setAttribute('aria-label', 'Список последних ошибок');
       for (const entry of view.errors) {
         const item = element('li');
         item.append(element('span', 'gallery-status-path', entry.path));

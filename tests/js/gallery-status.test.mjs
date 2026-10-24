@@ -5,6 +5,8 @@ import {createStatusPoller, describeStatus, errorSubject, formatMoment, isRelati
 import {formatCount} from '../../web/format.js';
 
 const now = new Date(2026, 9, 23, 13, 30);
+/** Tiles read as `value label`, the same text the surface shows. */
+const texts = metrics => (metrics ?? []).map(({value, label}) => `${value} ${label}`);
 const local = (day, hours, minutes) => new Date(2026, 9, day, hours, minutes).toISOString();
 
 const running = {
@@ -47,10 +49,24 @@ test('a running warm shows its start, progress and run metrics', () => {
   assert.equal(view.run.line, 'Текущий запуск — Выполняется');
   assert.equal(view.run.started, 'Запущен: сегодня в 10:00');
   assert.deepEqual(view.run.progress, {value: 120, max: 400, text: '120 / 400 · 30%'});
-  assert.deepEqual(view.run.metrics, ['120 обработано', '30 создано', '89 пропущено', '1 ошибка']);
-  assert.deepEqual(view.cache?.metrics, ['400 медиафайлов', '390 миниатюр готово', '8 миниатюр отсутствует', '2 миниатюры недоступны']);
-  assert.equal(view.cache?.size, 'Размер кэша: 1.2 ГБ');
+  assert.deepEqual(texts(view.run.metrics), ['120 обработано', '30 создано', '89 пропущено', '1 ошибка']);
+  assert.deepEqual(texts(view.cache?.metrics), ['400 медиафайлов', '390 миниатюр готово', '8 миниатюр отсутствует', '2 миниатюры недоступны', '1.2 ГБ размер кэша']);
   assert.equal(view.cache?.lastFullScan, 'Последний полный обход: вчера в 03:05');
+});
+
+test('each metric is a tile: the number apart from its plural label', () => {
+  const view = describeStatus(running, now);
+  assert.deepEqual(view.run.metrics[3], {value: '1', label: 'ошибка'});
+  assert.deepEqual(view.cache?.metrics[1], {value: '390', label: 'миниатюр готово'});
+  assert.deepEqual(view.cache?.metrics.at(-1), {value: '1.2 ГБ', label: 'размер кэша'});
+  assert.deepEqual(view.memories.metrics[0], {value: '147', label: 'периодов'});
+  assert.equal(describeStatus({...running, run: {...running.run, errors: 22}}, now).run.metrics[3].label, 'ошибки');
+});
+
+test('the cache size tile is shown only for a valid size; zero reads as 0 Б', () => {
+  const sized = sizeBytes => describeStatus({...running, cache: {...running.cache, sizeBytes}}, now).cache?.metrics;
+  assert.deepEqual(sized(0)?.at(-1), {value: '0 Б', label: 'размер кэша'});
+  for (const invalid of [undefined, -1, 1.5, '12']) assert.equal(sized(invalid)?.length, 4, String(invalid));
 });
 
 test('a finished run is ready and progress is computed when the server omits it', () => {
@@ -138,7 +154,7 @@ test('memories show state, last ready version and compact metrics', () => {
   const view = describeStatus(running, now);
   assert.equal(view.memories.line, 'Готово');
   assert.equal(view.memories.readyVersion, 'Последняя готовая версия: сегодня в 03:06');
-  assert.deepEqual(view.memories.metrics, ['147 периодов', '12 воспоминаний', '6 показано', '0 ошибок']);
+  assert.deepEqual(texts(view.memories.metrics), ['147 периодов', '12 воспоминаний', '6 показано', '0 ошибок']);
 });
 
 test('unavailable memories keep the last known good version', () => {
@@ -146,7 +162,7 @@ test('unavailable memories keep the last known good version', () => {
   const view = describeStatus({...running, memories}, now);
   assert.equal(view.memories.line, 'Статус недоступен');
   assert.equal(view.memories.readyVersion, 'Последняя готовая версия: вчера в 03:06');
-  assert.deepEqual(view.memories.metrics, ['147 периодов', '12 воспоминаний', '6 показано', '1 ошибка']);
+  assert.deepEqual(texts(view.memories.metrics), ['147 периодов', '12 воспоминаний', '6 показано', '1 ошибка']);
   const bare = describeStatus({...running, memories: {state: 'unavailable'}}, now);
   assert.equal(bare.memories.readyVersion, '');
   assert.deepEqual(bare.memories.metrics, []);

@@ -22,6 +22,54 @@ const READY = {...RUNNING, state: 'ready', run: {...RUNNING.run, state: 'succeed
 const surface = page => page.locator('#statusSurface');
 const section = (page, name) => surface(page).locator(`[data-status-section="${name}"]`);
 const metrics = locator => locator.locator('.gallery-status-metrics li');
+// Mirrors the one-column breakpoint in style.css (#statusSurface, max-width: 1099px).
+const STACKED_MAX_WIDTH = 1099;
+const isStacked = page => (page.viewportSize()?.width ?? 0) <= STACKED_MAX_WIDTH;
+// Enough entries to overflow the error card in every viewport.
+const MANY_ERRORS = Array.from({length: 20}, (_, index) => ({
+  at: `2026-10-23T07:${String(index).padStart(2, '0')}:00Z`,
+  operation: 'thumbnail',
+  path: `2024/Лето/broken-${String(index).padStart(2, '0')}.jpg`,
+  error: 'decode: unexpected EOF',
+}));
+const errorList = page => section(page, 'errors').getByRole('list', {name: 'Список последних ошибок'});
+const boxes = locators => Promise.all(locators.map(async locator => {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error('element has no box');
+  return box;
+}));
+/** Each metric list is a set of tiles: the number on top, larger than its label. */
+async function expectTiles(list, count) {
+  await expect(list.locator(':scope > li.gallery-status-tile')).toHaveCount(count);
+  const listBox = await list.boundingBox();
+  for (const tile of await list.locator(':scope > li').all()) {
+    const [box, value, label] = await boxes([tile, tile.locator('.gallery-status-value'), tile.locator('.gallery-status-label')]);
+    expect(value.y + value.height).toBeLessThanOrEqual(label.y + 1);
+    expect(box.x).toBeGreaterThanOrEqual((listBox?.x ?? 0) - 1);
+    expect(box.x + box.width).toBeLessThanOrEqual((listBox?.x ?? 0) + (listBox?.width ?? 0) + 1);
+    const [valueSize, labelSize] = await Promise.all([value, label].map((_, index) => tile
+      .locator(index ? '.gallery-status-label' : '.gallery-status-value')
+      .evaluate(element => parseFloat(getComputedStyle(element).fontSize))));
+    expect(valueSize).toBeGreaterThan(labelSize);
+  }
+}
+/** Distinct tile rows of one metric list. */
+const tileRows = list => list.locator(':scope > li').evaluateAll(items => new Set(items.map(item => Math.round(item.getBoundingClientRect().top))).size);
+/** The error list scrolls inside its card and leaves the page where it was. */
+async function expectErrorsScrollInside(page) {
+  const list = errorList(page);
+  const metrics = await list.evaluate(element => ({overflowY: getComputedStyle(element).overflowY, scrollHeight: element.scrollHeight, clientHeight: element.clientHeight}));
+  expect(metrics.overflowY).toBe('auto');
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight);
+  const [card, listBox] = await boxes([section(page, 'errors'), list]);
+  expect(listBox.y + listBox.height).toBeLessThanOrEqual(card.y + card.height + 1);
+  await list.focus();
+  await expect(list).toBeFocused();
+  const pageScroll = await page.evaluate(() => scrollY);
+  await page.keyboard.press('End');
+  await expect.poll(() => list.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => scrollY)).toBe(pageScroll);
+}
 
 /** Serve /api/status from `state.body` (or fail with `state.code`) and count requests. */
 async function mockStatus(page, body) {
@@ -63,8 +111,8 @@ test.describe('gallery status', () => {
     await expect(cache.locator('progress')).toHaveAttribute('max', '400');
     await expect(metrics(cache.locator('.gallery-status-run'))).toHaveText(['120 обработано', '30 создано', '89 пропущено', '2 ошибки']);
     const whole = section(page, 'whole-cache');
-    await expect(metrics(whole)).toHaveText(['400 медиафайлов', '390 миниатюр готово', '8 миниатюр отсутствует', '2 миниатюры недоступны']);
-    await expect(whole.locator('.gallery-status-sub')).toHaveText(['Размер кэша: 1.2 ГБ', 'Последний полный обход: вчера в 03:05']);
+    await expect(metrics(whole)).toHaveText(['400 медиафайлов', '390 миниатюр готово', '8 миниатюр отсутствует', '2 миниатюры недоступны', '1.2 ГБ размер кэша']);
+    await expect(whole.locator('.gallery-status-sub')).toHaveText(['Последний полный обход: вчера в 03:05']);
 
     await expect(section(page, 'errors').locator('.gallery-status-path')).toHaveText(['locked', '2024/Лето/broken.jpg']);
     await expect(section(page, 'errors').locator('li .gallery-status-sub')).toHaveText(['open: permission denied', 'decode: unexpected EOF']);
@@ -73,12 +121,8 @@ test.describe('gallery status', () => {
     await expect(memories.locator('.gallery-status-line')).toHaveText('Готово');
     await expect(memories.locator('.gallery-status-sub')).toHaveText('Последняя готовая версия: сегодня в 03:06');
     await expect(metrics(memories)).toHaveText(['147 периодов', '12 воспоминаний', '6 показано', '0 ошибок']);
-    // Each metric is one line: number and label never wrap apart.
-    for (const item of await metrics(memories).all()) {
-      const box = await item.boundingBox();
-      const lineHeight = await item.evaluate(element => parseFloat(getComputedStyle(element).lineHeight) || 24);
-      expect(box?.height).toBeLessThanOrEqual(lineHeight * 1.5);
-    }
+    await expect(memories.locator('.gallery-status-value')).toHaveText(['147', '12', '6', '0']);
+    await expect(memories.locator('.gallery-status-label')).toHaveText(['периодов', 'воспоминаний', 'показано', 'ошибок']);
 
     // Strictly read-only: no controls, no explanations, no gallery-only controls.
     await expect(surface(page).locator('button, input, select, a, [role="button"]')).toHaveCount(0);
@@ -251,6 +295,65 @@ test.describe('gallery status', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator('#gallerySurface')).toBeVisible();
     await expect(surface(page)).toBeHidden();
+  });
+
+  test('desktop: errors sit right of the whole cache block, memories span below, metrics are tiles', {tag: '@essential'}, async ({page}) => {
+    test.skip(isStacked(page), 'Two-column layout');
+    await mockStatus(page, {...RUNNING, recentErrors: MANY_ERRORS});
+    await page.goto('/');
+    await openStatus(page);
+
+    const [cache, errors, memories] = await boxes([section(page, 'cache'), section(page, 'errors'), section(page, 'memories')]);
+    expect(errors.x).toBeGreaterThanOrEqual(cache.x + cache.width);
+    expect(Math.abs(errors.y - cache.y)).toBeLessThanOrEqual(1);
+    // Twenty errors do not stretch the row: the card ends with the cache block.
+    expect(errors.y + errors.height).toBeLessThanOrEqual(cache.y + cache.height + 1);
+    expect(memories.y).toBeGreaterThanOrEqual(cache.y + cache.height);
+    expect(Math.abs(memories.x - cache.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(memories.x + memories.width - (errors.x + errors.width))).toBeLessThanOrEqual(1);
+
+    // From the focused heading, Tab reaches the error list first.
+    await expect(surface(page).getByRole('heading', {level: 1})).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(errorList(page)).toBeFocused();
+    await expectErrorsScrollInside(page);
+
+    const run = section(page, 'cache').locator('.gallery-status-run .gallery-status-metrics');
+    const whole = section(page, 'whole-cache').locator('.gallery-status-metrics');
+    const memoryTiles = section(page, 'memories').locator('.gallery-status-metrics');
+    await expectTiles(run, 4);
+    await expectTiles(whole, 5);
+    await expectTiles(memoryTiles, 4);
+    for (const list of [run, whole, memoryTiles]) expect(await tileRows(list)).toBe(1);
+  });
+
+  test('phone and tablet: Кэш, Последние ошибки, Воспоминания stack without horizontal overflow', async ({page}) => {
+    test.skip(!isStacked(page), 'One-column layout');
+    await mockStatus(page, {...RUNNING, recentErrors: MANY_ERRORS});
+    await page.goto('/');
+    await openStatus(page);
+
+    const [cache, errors, memories] = await boxes([section(page, 'cache'), section(page, 'errors'), section(page, 'memories')]);
+    expect(errors.y).toBeGreaterThanOrEqual(cache.y + cache.height);
+    expect(memories.y).toBeGreaterThanOrEqual(errors.y + errors.height);
+    for (const box of [errors, memories]) {
+      expect(Math.abs(box.x - cache.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.width - cache.width)).toBeLessThanOrEqual(1);
+    }
+    const viewport = page.viewportSize();
+    expect(errors.height).toBeLessThanOrEqual(Math.min(360, (viewport?.height ?? 0) * 0.6) + 1);
+    const overflow = await page.evaluate(() => [document.documentElement, document.querySelector('#statusSurface')]
+      .map(element => element.scrollWidth - element.clientWidth));
+    expect(Math.max(...overflow)).toBeLessThanOrEqual(0);
+
+    await expectErrorsScrollInside(page);
+
+    const whole = section(page, 'whole-cache').locator('.gallery-status-metrics');
+    await expectTiles(section(page, 'cache').locator('.gallery-status-run .gallery-status-metrics'), 4);
+    await expectTiles(whole, 5);
+    await expectTiles(section(page, 'memories').locator('.gallery-status-metrics'), 4);
+    // A phone has no room for five tiles in a row: they wrap.
+    if ((viewport?.width ?? 0) <= 700) expect(await tileRows(whole)).toBeGreaterThan(1);
   });
 
   test('touch: tapping the icon opens the status and tapping Галерея returns', async ({page}, testInfo) => {
