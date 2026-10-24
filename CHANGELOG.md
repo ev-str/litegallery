@@ -39,6 +39,8 @@
 - The filter, sorting, direction, and grouping controls sit at the top of the
   gallery, above the folders, and keep their place when `Из подпапок` is
   switched.
+- Date groups use only EXIF or embedded video capture times. Files without a
+  capture time stay in the final `Без даты` group.
 - A recursive listing stops at 100,000 media files; a larger subtree answers
   HTTP 413 and the gallery shows a clear message instead of a generic error.
 - The grids no longer announce every tile to screen readers; the status line

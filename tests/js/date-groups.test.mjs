@@ -6,7 +6,7 @@ import {createGalleryState} from '../../web/gallery-state.js';
 
 // Local noon of a calendar day, as the gallery's Unix seconds; independent of the test time zone.
 const at = (year, month, day, hour = 12) => new Date(year, month - 1, day, hour).getTime() / 1000;
-const item = (name, sortTime) => ({name, path: `Album/${name}`, sortTime});
+const item = (name, sortTime, captured = true) => ({name, path: `Album/${name}`, sortTime, captured});
 
 test('modes are normalized; anything unknown means no grouping', () => {
   assert.deepEqual(GROUP_MODES, ['none', 'year', 'month', 'day']);
@@ -71,15 +71,25 @@ test('a list sorted by name gets date groups in the sort direction and keeps nam
     item('banana.jpg', at(2026, 6, 1)),
     item('cherry.jpg', at(2024, 7, 1)),
     item('date.jpg', at(2026, 6, 2)),
-    item('elder.jpg', 0),
+    item('elder.jpg', 0, false),
   ];
   const ascending = groupMedia(byName, 'year', false);
-  assert.deepEqual(ascending.groups?.map(group => group.label), [UNDATED_LABEL, '2024', '2026']);
-  assert.deepEqual(ascending.items.map(entry => entry.name), ['elder.jpg', 'apple.jpg', 'cherry.jpg', 'banana.jpg', 'date.jpg']);
+  assert.deepEqual(ascending.groups?.map(group => group.label), ['2024', '2026', UNDATED_LABEL]);
+  assert.deepEqual(ascending.items.map(entry => entry.name), ['apple.jpg', 'cherry.jpg', 'banana.jpg', 'date.jpg', 'elder.jpg']);
   // Z–A: the caller reversed the names; groups go newest first, undated last.
   const descending = groupMedia([...byName].reverse(), 'year', true);
   assert.deepEqual(descending.groups?.map(group => group.label), ['2026', '2024', UNDATED_LABEL]);
   assert.deepEqual(descending.items.map(entry => entry.name), ['date.jpg', 'banana.jpg', 'cherry.jpg', 'apple.jpg', 'elder.jpg']);
+});
+
+test('a fallback file time is not grouped as a capture date, and Без даты is always last', () => {
+  const fallback = item('without-exif.jpg', at(2030, 1, 1), false);
+  const captured = item('captured.jpg', at(2020, 1, 1));
+  for (const descending of [false, true]) {
+    const result = groupMedia([fallback, captured], 'year', descending);
+    assert.deepEqual(result.groups?.map(group => group.label), ['2020', UNDATED_LABEL]);
+    assert.deepEqual(result.items.map(entry => entry.name), ['captured.jpg', 'without-exif.jpg']);
+  }
 });
 
 test('runs of a filtered grouped list are the same groups, narrowed', () => {

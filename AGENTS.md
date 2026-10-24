@@ -62,7 +62,7 @@ Browser-test rules:
   cannot read the first run's `.last-run.json`:
 
   ```sh
-  litegallery_e2e_runtime="$(mktemp -d /tmp/litegallery-e2e.XXXXXX)"
+  litegallery_e2e_runtime="$(mktemp -d "${TMPDIR:-/tmp}/litegallery-e2e.XXXXXX")"
   export LITEGALLERY_E2E_RUNTIME="$litegallery_e2e_runtime"
 
   npx playwright test --timeout=15000 --max-failures=10

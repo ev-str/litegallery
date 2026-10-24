@@ -27,8 +27,9 @@ photo library already has a useful folder structure and must remain untouched.
 - Keyboard, remote-control focus, swipe, and previous/next navigation.
 - Filters for all media, photos only, or videos only.
 - Sorting by filename or capture date, in either direction, and grouping by
-  year, month, or day. These controls sit at the top of the gallery, above
-  the folders.
+  year, month, or day. Groups use only EXIF or embedded video capture times;
+  files without one stay in the final **Без даты** group. These controls sit
+  at the top of the gallery, above the folders.
 - **Из подпапок** shows all photos and videos below the open folder, including
   when the library root is open.
 - **Найти** searches file and folder names across the whole library, wherever

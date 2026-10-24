@@ -63,7 +63,7 @@ func TestSearchMatchesNamesAndPathsInIndexOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Entry{
-		{Name: "IMG_0001.jpg", Path: "2024/Summer/Beach/IMG_0001.jpg", Kind: "image", Size: 10, ModTime: time.Unix(0, searchItems[0].ModifiedNS).Format("2006-01-02T15:04:05Z07:00"), SortTime: 100},
+		{Name: "IMG_0001.jpg", Path: "2024/Summer/Beach/IMG_0001.jpg", Kind: "image", Size: 10, ModTime: time.Unix(0, searchItems[0].ModifiedNS).Format("2006-01-02T15:04:05Z07:00"), SortTime: 100, Captured: true},
 		{Name: "IMG_0001.jpg", Path: "2024/Winter/IMG_0001.jpg", Kind: "image", Size: 20, ModTime: time.Unix(0, searchItems[1].ModifiedNS).Format("2006-01-02T15:04:05Z07:00"), SortTime: 200},
 	}
 	if result.Query != "img_0001" || result.Truncated || len(result.Entries) != len(want) {

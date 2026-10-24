@@ -92,6 +92,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 			Size:     item.Size,
 			ModTime:  time.Unix(0, item.ModifiedNS).Format("2006-01-02T15:04:05Z07:00"),
 			SortTime: item.SortTime,
+			Captured: item.Captured,
 		})
 	}
 	w.Header().Set("Cache-Control", "no-store")

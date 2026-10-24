@@ -5,7 +5,7 @@ import {clickHeaderControl, directory, listing, mockListings, mockSearch, scroll
 
 // The browser runs in Europe/Moscow (UTC+3, no DST): a Moscow wall-clock time as Unix seconds.
 const moscow = (year, month, day, hour = 12) => Date.UTC(year, month - 1, day, hour - 3) / 1000;
-const file = (path, sortTime, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 2048, modTime: '2026-01-15T12:00:00Z', sortTime});
+const file = (path, sortTime, kind = 'image', captured = true) => ({name: path.split('/').pop(), path, kind, size: 2048, modTime: '2026-01-15T12:00:00Z', sortTime, captured});
 
 // Names and dates disagree, so name order and date order differ; the dates cross a year and a month border.
 const TRIP_FILES = [
@@ -18,6 +18,7 @@ const TRIP_FILES = [
   file('Trip/g.jpg', moscow(2026, 9, 5)),
 ];
 const DAY2_FILES = [file('Trip/Day 2/h.jpg', moscow(2026, 9, 7)), file('Trip/Day 2/i.jpg', moscow(2024, 5, 1))];
+const NO_EXIF_FILES = [file('No EXIF/old.jpg', moscow(2020, 1, 1)), file('No EXIF/fallback.jpg', moscow(2030, 1, 1), 'image', false)];
 
 // The large folder: 5000 photos, seven per day, newest last.
 const LARGE = 'Large';
@@ -29,6 +30,7 @@ const LISTINGS = {
   '': [directory('Trip'), directory(LARGE)],
   Trip: [directory('Trip/Day 2'), ...TRIP_FILES],
   'Trip?recursive': [...TRIP_FILES, ...DAY2_FILES],
+  'No EXIF': NO_EXIF_FILES,
   [LARGE]: LARGE_FILES,
 };
 
@@ -96,6 +98,14 @@ test('Нет, Год, Месяц, and День group the visible list under comp
   await chooseGrouping(page, 'none');
   await expect(page.locator('#mediaGrid .media-group-heading')).toHaveCount(0);
   expect(await page.evaluate(key => localStorage.getItem(key), GROUP_STORAGE_KEY)).toBe('none');
+});
+
+test('files without capture metadata stay in the final Без даты group', {tag: '@essential'}, async ({page}) => {
+  await page.goto('/?path=No%20EXIF');
+  await chooseGrouping(page, 'year');
+  expect(await visual(page)).toEqual(['# 2020', 'old.jpg', '# Без даты', 'fallback.jpg']);
+  await page.locator('#mediaDirection').click();
+  expect(await visual(page)).toEqual(['# 2020', 'old.jpg', '# Без даты', 'fallback.jpg']);
 });
 
 test('groups follow the sort direction; name order is kept inside each group', {tag: '@essential'}, async ({page}) => {

@@ -241,7 +241,7 @@ func TestListUsesCachedCaptureTime(t *testing.T) {
 			photoEntry = entry
 		}
 	}
-	if photoEntry.SortTime != captured {
+	if photoEntry.SortTime != captured || !photoEntry.Captured {
 		t.Fatalf("entries: %+v", result.Entries)
 	}
 }

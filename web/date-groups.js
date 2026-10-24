@@ -1,10 +1,9 @@
 // @ts-check
 
-// Grouping of the visible media list by capture date. The date is the listing's
-// sortTime: the indexed EXIF or container time, or the server's fallback; nothing
-// is read from the files here. Groups follow the sort direction, and inside a
-// group the list keeps its own order, so the flat list a viewer gets is exactly
-// the order of the tiles on screen.
+// Grouping of the visible media list by an indexed EXIF or container capture
+// time. Files without one stay in the final "Без даты" group. Nothing is read
+// from the files here. Inside a group the list keeps its own order, so the flat
+// list a viewer gets is exactly the order of the tiles on screen.
 
 /** @typedef {'none'|'year'|'month'|'day'} GroupMode */
 /** @typedef {{key: string, label: string, count: number}} DateGroup consecutive items of one date */
@@ -49,7 +48,7 @@ export function groupLabel(key) {
 
 /**
  * Consecutive runs of one date in an already grouped list, or null without grouping.
- * @param {{sortTime?: number}[]} items @param {GroupMode} mode
+ * @param {{sortTime?: number, captured?: boolean}[]} items @param {GroupMode} mode
  * @returns {DateGroup[] | null}
  */
 export function groupRuns(items, mode) {
@@ -57,7 +56,7 @@ export function groupRuns(items, mode) {
   /** @type {DateGroup[]} */
   const groups = [];
   for (const item of items) {
-    const key = groupKey(item.sortTime, mode);
+    const key = groupKey(item.captured ? item.sortTime : 0, mode);
     const last = groups.at(-1);
     if (last?.key === key) last.count++;
     else groups.push({key, label: groupLabel(key), count: 1});
@@ -69,7 +68,7 @@ export function groupRuns(items, mode) {
  * Group a sorted list: groups in date order, newest first when `descending`;
  * each group keeps the items in the order they came. A list sorted by date is
  * returned in the same order.
- * @template {{sortTime?: number}} T
+ * @template {{sortTime?: number, captured?: boolean}} T
  * @param {T[]} items sorted list @param {GroupMode} mode @param {boolean} descending
  * @returns {{items: T[], groups: DateGroup[] | null}}
  */
@@ -78,13 +77,14 @@ export function groupMedia(items, mode, descending) {
   /** @type {Map<string, T[]>} */
   const buckets = new Map();
   for (const item of items) {
-    const key = groupKey(item.sortTime, mode);
+    const key = groupKey(item.captured ? item.sortTime : 0, mode);
     const bucket = buckets.get(key);
     if (bucket) bucket.push(item);
     else buckets.set(key, [item]);
   }
-  const keys = [...buckets.keys()].sort();
+  const keys = [...buckets.keys()].filter(Boolean).sort();
   if (descending) keys.reverse();
+  if (buckets.has('')) keys.push('');
   const ordered = keys.flatMap(key => /** @type {T[]} */ (buckets.get(key)));
   return {items: ordered, groups: groupRuns(ordered, mode)};
 }

@@ -5,7 +5,7 @@ import {clickHeaderControl, directory, galleryView, listing, mockListings, mockS
 
 const BASE_TIME = 1_760_000_000;
 
-const file = (path, hour, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 1000 + hour, modTime: '2026-01-15T12:00:00Z', sortTime: BASE_TIME + hour * 3600});
+const file = (path, hour, kind = 'image') => ({name: path.split('/').pop(), path, kind, size: 1000 + hour, modTime: '2026-01-15T12:00:00Z', sortTime: BASE_TIME + hour * 3600, captured: true});
 
 // "Paris" and "Rome" appear only in subfolder names; "sea" in names at every level.
 const TRIP_FILES = [
@@ -219,6 +219,7 @@ test.describe('Найти', () => {
     await expect(results(page)).toHaveCount(3);
     expect(await resultPaths(page)).toEqual(['Trip/Paris/Night/eiffel.mp4', 'Trip/Paris/louvre.png', 'Trip/Paris/Sea shore.jpg']);
     await expect(page.locator('#searchGrid .media-group-heading')).toHaveCount(1);
+    await expect(page.locator('#searchGrid .media-group-heading')).toHaveText('2025');
   });
 
   test('TV follows the list of the current section: gallery media there, results in Найти', {tag: '@essential'}, async ({page}) => {

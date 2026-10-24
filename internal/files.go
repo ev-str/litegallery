@@ -36,6 +36,7 @@ type Entry struct {
 	Size     int64  `json:"size,omitempty"`
 	ModTime  string `json:"modTime,omitempty"`
 	SortTime int64  `json:"sortTime,omitempty"`
+	Captured bool   `json:"captured,omitempty"`
 }
 
 type listing struct {
@@ -179,15 +180,17 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 
 func mediaEntry(name, rel, kind string, info os.FileInfo, metadata metadataManifest) Entry {
 	sortTime := fileCreatedUnix(info)
+	captured := false
 	if cached, ok := metadata.Files[name]; ok && cached.matches(kind, info) {
 		if cached.Created != 0 {
 			sortTime = cached.Created
 		}
 		if cached.Captured != 0 {
 			sortTime = cached.Captured
+			captured = true
 		}
 	}
-	return Entry{Name: name, Path: rel, Kind: kind, Size: info.Size(), ModTime: info.ModTime().Format("2006-01-02T15:04:05Z07:00"), SortTime: sortTime}
+	return Entry{Name: name, Path: rel, Kind: kind, Size: info.Size(), ModTime: info.ModTime().Format("2006-01-02T15:04:05Z07:00"), SortTime: sortTime, Captured: captured}
 }
 
 func (s *Server) resolve(input string) (string, string, error) {
