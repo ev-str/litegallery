@@ -109,10 +109,10 @@ test('an opened folder remembers its recursive mode in its view and its address'
   assert.deepEqual(readPageURL('?path=Album%20A'), {path: 'Album A', recursive: false});
 });
 
-test('the root never lists recursively, even with a stored or addressed mode', () => {
+test('the root supports recursive listings in requests, addresses, and saved views', () => {
   for (const root of ['', '.', '/', './', '//', './/']) {
     assert.equal(isRoot(root), true);
-    assert.equal(listingURL(root, true), `/api/list?path=${encodeURIComponent(root)}`);
+    assert.equal(listingURL(root, true), `/api/list?path=${encodeURIComponent(root)}&recursive=1`);
   }
   assert.equal(isRoot('.hidden-name'), false);
   for (const folder of ['..', '...', '....', '.../']) {
@@ -121,15 +121,15 @@ test('the root never lists recursively, even with a stored or addressed mode', (
     assert.equal(pageURL(folder, true), `/?path=${encodeURIComponent(folder)}&recursive=1`);
     assert.deepEqual(readPageURL(`?path=${encodeURIComponent(folder)}&recursive=1`), {path: folder, recursive: true});
   }
-  assert.equal(pageURL('', true), '/');
-  assert.deepEqual(readPageURL('?recursive=1'), {path: '', recursive: false});
-  assert.deepEqual(readPageURL('?path=.&recursive=1'), {path: '.', recursive: false});
+  assert.equal(pageURL('', true), '/?recursive=1');
+  assert.deepEqual(readPageURL('?recursive=1'), {path: '', recursive: true});
+  assert.deepEqual(readPageURL('?path=.&recursive=1'), {path: '.', recursive: true});
 
   const state = createGalleryState({path: '', recursive: true, local: memoryStorage(), session: memoryStorage()});
-  assert.equal(state.recursive, false);
+  assert.equal(state.recursive, true);
   state.saveView('', {recursive: true});
   assert.equal(state.view('')?.recursive, true);
-  assert.equal(state.recursiveFor(''), false);
+  assert.equal(state.recursiveFor(''), true);
 });
 
 test('the recursive mode leaves the other controls and the folder view alone', () => {

@@ -28,10 +28,6 @@ func parseRecursive(value string) (recursive bool, ok bool) {
 }
 
 func (s *Server) handleRecursiveList(w http.ResponseWriter, r *http.Request, rel, abs string) {
-	if rel == "." {
-		http.Error(w, "recursive listing is not available at the library root", http.StatusBadRequest)
-		return
-	}
 	entries, err := s.listRecursive(r.Context(), rel, abs)
 	if err != nil {
 		if r.Context().Err() != nil {

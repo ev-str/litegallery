@@ -2,8 +2,7 @@
 // The one owner of gallery view state. Controls persist in localStorage under the
 // keys used since v0.2; per-folder views (scroll anchor, focus target) live for the
 // tab in sessionStorage, so they survive refresh and reload but not a new tab.
-// The recursive mode of a folder is part of its view and of the page address;
-// the library root never lists recursively.
+// The recursive mode of a folder is part of its view and of the page address.
 
 import {GROUP_STORAGE_KEY, normalizeGroupMode} from './date-groups.js';
 
@@ -15,17 +14,20 @@ const MAX_VIEWS = 200;
 /** The root is "" or ".", optionally followed by slashes; ".." and longer dot names are folders. @param {string} folder */
 export const isRoot = folder => ['', '.'].includes(folder.replace(/\/+$/, ''));
 
-/** Listing request for a folder; the root always gets the plain listing. @param {string} folder @param {boolean} recursive */
-export const listingURL = (folder, recursive) => `/api/list?path=${encodeURIComponent(folder)}${recursive && !isRoot(folder) ? '&recursive=1' : ''}`;
+/** Listing request for a folder. @param {string} folder @param {boolean} recursive */
+export const listingURL = (folder, recursive) => `/api/list?path=${encodeURIComponent(folder)}${recursive ? '&recursive=1' : ''}`;
 
 /** Page address of a folder view. @param {string} folder @param {boolean} recursive */
-export const pageURL = (folder, recursive) => (folder ? `/?path=${encodeURIComponent(folder)}${recursive && !isRoot(folder) ? '&recursive=1' : ''}` : '/');
+export const pageURL = (folder, recursive) => {
+  const query = [folder ? `path=${encodeURIComponent(folder)}` : '', recursive ? 'recursive=1' : ''].filter(Boolean).join('&');
+  return query ? `/?${query}` : '/';
+};
 
 /** Folder and recursive mode named by a page query string. @param {string} search */
 export function readPageURL(search) {
   const params = new URLSearchParams(search);
   const path = params.get('path') || '';
-  return {path, recursive: params.get('recursive') === '1' && !isRoot(path)};
+  return {path, recursive: params.get('recursive') === '1'};
 }
 
 /**
@@ -56,8 +58,8 @@ export function createGalleryState({path = '', recursive = false, local, session
     requestedPath: path,
     /** Folder whose listing is on screen; null while loading or after an error. @type {string|null} */
     shownPath: null,
-    /** Recursive mode of the newest load; never true for the root. */
-    recursive: recursive && !isRoot(path),
+    /** Recursive mode of the newest load. */
+    recursive,
     sortKey: sortKey === 'name' ? 'name' : 'date',
     filter: filter === 'image' || filter === 'video' ? filter : 'all',
     descending: local.getItem('gallery-media-order') !== 'asc',
@@ -103,7 +105,7 @@ export function createGalleryState({path = '', recursive = false, local, session
     },
     /** Mode a folder opens in: the one it was last shown with. @param {string} folder */
     recursiveFor(folder) {
-      return !isRoot(folder) && views.get(folder)?.recursive === true;
+      return views.get(folder)?.recursive === true;
     },
     /** @param {string} folder @returns {FolderView|undefined} */
     view(folder) {

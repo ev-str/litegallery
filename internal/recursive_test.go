@@ -176,18 +176,22 @@ func TestRecursiveListUsesCachedCaptureTime(t *testing.T) {
 	}
 }
 
-func TestRecursiveListRejectsLibraryRoot(t *testing.T) {
+func TestRecursiveListSupportsLibraryRoot(t *testing.T) {
 	s, root := testServer(t)
+	writeFixture(t, root, "root.jpg")
 	writeFixture(t, root, "album/photo.jpg")
+	writeFixture(t, root, ".hidden.jpg")
 	symlinkFixture(t, root, filepath.Join(root, "album", "to-root"))
 
 	for _, path := range []string{"", " ", ".", "./", "album/..", "album/./..", "album/to-root"} {
 		response := getList(t, s, path, "1")
-		if response.Code != http.StatusBadRequest {
+		if response.Code != http.StatusOK {
 			t.Fatalf("path %q: status = %d, body = %q", path, response.Code, response.Body.String())
 		}
-		if body := response.Body.String(); body != "recursive listing is not available at the library root\n" {
-			t.Fatalf("path %q: body = %q", path, body)
+		entries := decodeListing(t, response).Entries
+		want := []string{"root.jpg", "album/photo.jpg"}
+		if got := entryPaths(entries); !reflect.DeepEqual(got, want) {
+			t.Fatalf("path %q: paths = %v, want %v", path, got, want)
 		}
 	}
 }

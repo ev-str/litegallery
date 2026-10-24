@@ -4,7 +4,7 @@ import {createCollageSelection} from './collage-selection.js';
 import {groupMedia} from './date-groups.js';
 import {apiURL, formatCount, formatDate, formatDuration, formatFileDetails} from './format.js';
 import {createGalleryStatus} from './gallery-status.js';
-import {createGalleryState, DENSITY_CHOICES, isRoot, listingURL, pageURL, readPageURL} from './gallery-state.js';
+import {createGalleryState, DENSITY_CHOICES, listingURL, pageURL, readPageURL} from './gallery-state.js';
 import {iconLabelMarkup, iconMarkup} from './icons.js';
 import {createRefreshLoop} from './live-refresh.js';
 import {createLoadQueue} from './load-queue.js';
@@ -304,7 +304,7 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
   rememberView();
   state.shownPath = null;
   state.requestedPath = path;
-  state.recursive = recursive && !isRoot(path);
+  state.recursive = recursive;
   updateRecursiveToggle();
   loadController?.abort();
   liveRefresh.abort();
@@ -338,7 +338,7 @@ async function load(path, {history: address = 'push', recursive = state.recursiv
     const target = pageURL(state.path, state.recursive);
     if (address === 'replace') history.replaceState({path: state.path, recursive: state.recursive}, '', target);
     else if (address === 'push' && location.pathname + location.search !== target) history.pushState({path: state.path, recursive: state.recursive}, '', target);
-    if (state.path) state.saveView(state.path, {recursive: state.recursive});
+    state.saveView(state.path, {recursive: state.recursive});
     renderBreadcrumbs();
     clearTimeout(skeletonTimer);
     delete mediaSection.dataset.loading;
@@ -426,7 +426,7 @@ function subfolderContext(items, folder) {
 }
 
 function updateRecursiveToggle() {
-  recursiveToggle.hidden = isRoot(state.requestedPath);
+  recursiveToggle.hidden = false;
   recursiveToggle.setAttribute('aria-pressed', String(state.recursive));
 }
 

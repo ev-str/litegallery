@@ -14,8 +14,8 @@
 - Viewer zoom, pan, pinch, and rotation; slideshow with 5, 10, or 30 second
   intervals and shuffle; TV mode; arrow-key navigation between tiles for TV
   remotes.
-- `Из подпапок` shows the media of a folder together with its subfolders
-  (`/api/list?recursive=1`).
+- `Из подпапок` shows the media of a folder together with its subfolders,
+  including from the library root (`/api/list?recursive=1`).
 - Folders with thousands of files render only the tiles near the screen.
 - The open folder is checked in the background every 45 seconds; changes
   appear in place and keep the scroll position and focus.

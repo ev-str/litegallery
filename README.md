@@ -29,6 +29,8 @@ photo library already has a useful folder structure and must remain untouched.
 - Sorting by filename or capture date, in either direction, and grouping by
   year, month, or day. These controls sit at the top of the gallery, above
   the folders.
+- **Из подпапок** shows all photos and videos below the open folder, including
+  when the library root is open.
 - **Найти** searches file and folder names across the whole library, wherever
   the gallery is open. Results show their folder and follow the gallery's
   filter, sorting, and grouping.

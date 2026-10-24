@@ -19,6 +19,7 @@ const TRIP_FILES = [
 ];
 const LISTINGS = {
   '': [directory('Trip'), directory('Empty'), directory('Broken')],
+  '?recursive': TRIP_FILES,
   Trip: [directory('Trip/Day 1'), directory('Trip/Day 2'), directory('Trip/Day 3'), TRIP_FILES[0], TRIP_FILES[1]],
   'Trip?recursive': TRIP_FILES,
   Empty: [directory('Empty/Sub')],
@@ -58,19 +59,33 @@ async function switchRecursive(page, on) {
   await expect(page.locator('#refresh')).not.toHaveAttribute('aria-busy', 'true');
 }
 
-test('the toggle is absent at the root, also when the address asks for it', {tag: '@essential'}, async ({page}) => {
+test('the toggle lists the whole library at the root and survives reload and history', {tag: '@essential'}, async ({page}) => {
   const library = await mockLibrary(page);
   await page.goto('/?recursive=1');
-  await expect(page.locator('#folders .folder-card')).toHaveCount(3);
-  await expect(toggle(page)).toBeHidden();
-  await page.getByRole('button', {name: 'Открыть папку Trip'}).click();
   await expect(toggle(page)).toBeVisible();
-  await switchRecursive(page, true);
-  await page.getByRole('button', {name: 'Все фото'}).click();
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#folders .folder-card')).toHaveCount(0);
+  await expect(tiles(page)).toHaveCount(TRIP_FILES.length);
+  await expect(page).toHaveURL(/\/?\?recursive=1$/);
+
+  await page.reload();
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(tiles(page)).toHaveCount(TRIP_FILES.length);
+
+  await toggle(page).click();
   await expect(page.locator('#folders .folder-card')).toHaveCount(3);
-  await expect(toggle(page)).toBeHidden();
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await expect(page).toHaveURL(/\/$/);
-  expect(library.requests.filter(key => key.endsWith('?recursive'))).toEqual(['Trip?recursive']);
+
+  await toggle(page).click();
+  await expect(tiles(page)).toHaveCount(TRIP_FILES.length);
+  await page.goto('/?path=Trip');
+  await expect(page.locator('#folders .folder-card')).toHaveCount(3);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/?\?recursive=1$/);
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
+  await expect(tiles(page)).toHaveCount(TRIP_FILES.length);
+  expect(library.requests.filter(key => key === '?recursive').length).toBeGreaterThanOrEqual(4);
 });
 
 test('the toggle asks the real server for the recursive listing of the opened folder', {tag: '@essential'}, async ({page}) => {
@@ -267,20 +282,20 @@ test('Back and Forward restore each entry\'s mode; a folder reopens in its last 
   await openTrip(page);
   await switchRecursive(page, true);
   await page.getByRole('button', {name: 'Все фото'}).click();
-  await expect(toggle(page)).toBeHidden();
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', {name: 'Открыть папку Empty'}).click();
   await expect(page.locator('#folders .folder-card')).toHaveCount(1);
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
 
   await page.goBack();
   await expect(page.locator('#folders .folder-card')).toHaveCount(3);
-  await expect(toggle(page)).toBeHidden();
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await page.goBack();
   await expect(page).toHaveURL(/\?path=Trip&recursive=1$/);
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(tiles(page)).toHaveCount(TRIP_FILES.length);
   await page.goForward();
-  await expect(toggle(page)).toBeHidden();
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   await page.goForward();
   await expect(page).toHaveURL(/\?path=Empty$/);
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
